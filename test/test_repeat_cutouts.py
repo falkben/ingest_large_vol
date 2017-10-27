@@ -1,88 +1,107 @@
-import re
-import time
-import unittest
+from argparse import Namespace
+import os
 
-import tifffile as tiff
-from PIL import Image
+import numpy as np
+import pytest
 
-from repeat_cutouts import *
+from ..src.ingest.boss_resources import BossResParams
+from ..src.ingest.ingest_job import IngestJob
+from ..repeat_cutouts import Cutout, ingest_cuts, parse_cut_line
+from .create_images import del_test_images, gen_images
 
 
-class TestRepeatCutouts(unittest.TestCase):
+class TestRepeatCutouts:
 
-    def setUp(self):
-        self.startTime = time.time()
-
-        self.rmt = BossRemote('neurodata.cfg')
-
-    def tearDown(self):
-        t = time.time() - self.startTime
-        print('{:03.1f}s: {}'.format(t, self.id()))
+    def setup(self):
+        pass
 
     def test_parse_cut_line(self):
         cutout_text = 'Coll: ben_dev, Exp: dev_ingest_2, Ch: def_files, x: (0, 512), y: (0, 512), z: (0, 16)\n'
         coll, exp, ch, x, y, z = parse_cut_line(cutout_text)
         cut = Cutout(coll, exp, ch, x, y, z)
 
-        self.assertEqual(cut.collection, coll)
-        self.assertEqual(cut.experiment, exp)
-        self.assertEqual(cut.channel, ch)
-        self.assertEqual(cut.x, x)
-        self.assertEqual(cut.y, y)
-        self.assertEqual(cut.z, z)
+        assert cut.collection == coll
+        assert cut.experiment == exp
+        assert cut.channel == ch
+        assert cut.x == x
+        assert cut.y == y
+        assert cut.z == z
 
     def test_get_boss_resources(self):
         cutout_text = 'Coll: ben_dev, Exp: dev_ingest_2, Ch: def_files, x: (0, 512), y: (0, 512), z: (0, 16)\n'
         coll, exp, ch, x, y, z = parse_cut_line(cutout_text)
-        boss_res_params = BossResParams(coll, exp, ch)
-        boss_res_params.setup_resources(self.rmt, get_only=True)
 
-        self.assertEqual(boss_res_params.coll_resource.name, coll)
-        self.assertEqual(boss_res_params.exp_resource.name, exp)
-        self.assertEqual(boss_res_params.ch_resource.name, ch)
+        datasource, s3_bucket_name, aws_profile, boss_config_file, base_path, base_filename, extension, z_step, datatype = create_local_ingest_params()
+        args = Namespace(
+            datasource=datasource,
+            collection=coll,
+            experiment=exp,
+            channel=ch,
+            datatype=datatype,
+            aws_profile=aws_profile,
+            boss_config_file=boss_config_file,
+            base_path=base_path,
+            base_filename=base_filename,
+            extension=extension,
+            z_range=[0, 16],
+            z_step=z_step,
+            warn_missing_files=True
+        )
+        ingest_job = IngestJob(args)
+        boss_res_params = BossResParams(ingest_job, get_only=True)
 
-    def test_create_local_IngestJob(self):
-        source_type, s3_bucket_name, aws_profile, boss_config_file, data_directory, file_name_pattern, img_format, z_step = create_local_ingest_params()
-        input_ingest_job = {'source_type': source_type, 's3_bucket_name': s3_bucket_name, 'aws_profile': aws_profile, 'boss_config_file': boss_config_file,
-                            'data_directory': data_directory, 'file_name_pattern': file_name_pattern, 'img_format': img_format, 'z_step': z_step}
-        ingestjob = IngestJob(**input_ingest_job)
-
-        ingestjob_attributes = {key: value for key, value in ingestjob.__dict__.items(
-        ) if not key.startswith('__') and not callable(key)}
-
-        self.assertTrue(all(item in ingestjob_attributes.items()
-                            for item in input_ingest_job.items()))
+        assert boss_res_params.coll_resource.name == coll
+        assert boss_res_params.exp_resource.name == exp
+        assert boss_res_params.ch_resource.name == ch
 
     def test_local_ingest_cuts(self):
-        source_type, s3_bucket_name, aws_profile, boss_config_file, data_directory, file_name_pattern, img_format, z_step = create_local_ingest_params()
-        input_ingest_job = {'source_type': source_type, 's3_bucket_name': s3_bucket_name, 'aws_profile': aws_profile, 'boss_config_file': boss_config_file,
-                            'data_directory': data_directory, 'file_name_pattern': file_name_pattern, 'img_format': img_format, 'z_step': z_step}
-        ingestjob = IngestJob(**input_ingest_job)
+        cut = create_cutout()
+        coll, exp, ch = (cut.collection, cut.experiment, cut.channel)
 
-        cutouts = [create_cutout()]
+        datasource, s3_bucket_name, aws_profile, boss_config_file, base_path, base_filename, extension, z_step, datatype = create_local_ingest_params()
+        args = Namespace(
+            datasource=datasource,
+            s3_bucket_name=s3_bucket_name,
+            collection=coll,
+            experiment=exp,
+            channel=ch,
+            datatype=datatype,
+            aws_profile=aws_profile,
+            boss_config_file=boss_config_file,
+            base_path=base_path,
+            base_filename=base_filename,
+            extension=extension,
+            z_range=[0, 16],
+            z_step=z_step,
+            warn_missing_files=True
+        )
 
-        # ideally create the tif files here, not rely on other tests to have created them for you
+        ingest_job = IngestJob(args)
+        boss_res_params = BossResParams(ingest_job, get_only=True)
+
+        gen_images(ingest_job, args.z_range[1])
 
         # ingest the cut
-        ingest_cuts(cutouts, ingestjob)
+        ingest_cuts([cut], ingest_job, boss_res_params)
 
-        # pull the data from the boss
-        cut = cutouts[-1]
-        coll, exp, ch = (cut.collection, cut.experiment, cut.channel)
-        boss_res_params = BossResParams(coll, exp, ch)
-        boss_res_params.setup_resources(ingestjob.rmt, get_only=True)
-        data_boss = self.rmt.get_cutout(
+        # pull the data from the boss after the new ingest
+        data_boss = boss_res_params.rmt.get_cutout(
             boss_res_params.ch_resource, 0, cut.x, cut.y, cut.z)
 
         # test to make sure it's the same as local file
         z_slices = range(cut.z[0], cut.z[1])
-        s3_res = None
 
-        # ideally we'd have our own simpler function to read in the image files
-        im_array = read_img_stack(boss_res_params, z_slices, file_name_pattern, data_directory,
-                                  img_format, s3_res, s3_bucket_name, cut.z, z_step, warn_missing_files=False)
+        # loading data locally for comparison
+        im_array = ingest_job.read_img_stack(z_slices)
         data_local = im_array[:, cut.y[0]:cut.y[1], cut.x[0]:cut.x[1]]
-        self.assertTrue(np.array_equal(data_local, data_boss))
+        assert np.array_equal(data_local, data_boss)
+
+        del_test_images(ingest_job, args.z_range[1])
+        os.remove(ingest_job.get_log_fname())
+        os.remove(cut.log_fname)
+
+    def test_iterate_posting_cutouts(self):
+        pass
 
 
 def create_cutout():
@@ -100,8 +119,5 @@ def create_local_ingest_params():
     file_name_pattern = 'img_<p:4>'
     img_format = 'tif'
     z_step = 1
-    return source_type, s3_bucket_name, aws_profile, boss_config_file, data_directory, file_name_pattern, img_format, z_step
-
-
-if __name__ == '__main__':
-    unittest.main()
+    datatype = 'uint16'
+    return source_type, s3_bucket_name, aws_profile, boss_config_file, data_directory, file_name_pattern, img_format, z_step, datatype

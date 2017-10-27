@@ -1,122 +1,209 @@
-import configparser
-import time
-import unittest
+import ast
+import os
+from argparse import Namespace
+from datetime import datetime
 
-import requests
+import pytest
+from requests import HTTPError
 
-from boss_resources import *
+from ..src.ingest.boss_resources import BossRemote, BossResParams
+from ..src.ingest.ingest_job import IngestJob
 
 BOSS_URL = 'https://api.boss.neurodata.io/latest/'
 
 
-class TestBossResources(unittest.TestCase):
+class TestBossResources:
 
-    def setUp(self):
-        self.startTime = time.time()
+    def setup(self):
+        pass
 
-        # create a session for the BOSS using intern
-        self.rmt = BossRemote('neurodata.cfg')
+    def test_get_boss_res_params_just_names(self):
+        args = Namespace(
+            datasource='local',
+            collection='ben_dev',
+            experiment='dev_ingest_4',
+            channel='def_files',
+            boss_config_file='neurodata.cfg')
 
-    def tearDown(self):
-        t = time.time() - self.startTime
-        print('{:03.1f}s: {}'.format(t, self.id()))
+        ingest_job = IngestJob(args)
 
-    def test_create_boss_res_params_just_names(self):
+        boss_res_params = BossResParams(ingest_job, get_only=True)
+        assert boss_res_params.coll_resource.name == args.collection
+        assert boss_res_params.exp_resource.name == args.experiment
+        assert boss_res_params.ch_resource.name == args.channel
+        assert boss_res_params.exp_resource.hierarchy_method == 'isotropic'
+        assert ingest_job.x_extent == [0, 1000]
+        assert ingest_job.y_extent == [0, 1024]
+        assert ingest_job.z_extent == [0, 100]
+        assert ingest_job.voxel_size == [1, 1, 1]
+        assert ingest_job.voxel_unit == 'micrometers'
+        assert ingest_job.img_size == [1000, 1024, 100]
+        assert ingest_job.offsets == [0, 0, 0]
+        assert ingest_job.datatype == 'uint16'
+        assert ingest_job.boss_datatype == 'uint16'
+        assert ingest_job.res == 0
+        assert ingest_job.extension is None
+        assert ingest_job.z_step is None
 
-        coll_name = 'ben_dev'
-        exp_name = 'dev_ingest_4'
-        ch_name = 'def_files'
-
-        boss_res_params = BossResParams(
-            coll_name, exp_name, ch_name)
-        self.assertEqual(boss_res_params.coll_name, coll_name)
-        self.assertEqual(boss_res_params.exp_name, exp_name)
-        self.assertEqual(boss_res_params.ch_name, ch_name)
-
-    def test_get_existing_boss_res_from_just_names(self):
-        parser = configparser.ConfigParser(interpolation=None)
-        with open('neurodata.cfg') as f:
-            parser.read_file(f)
-        APITOKEN = parser['Default']['token']
-
-        coll_name = 'ben_dev'
-        exp_name = 'dev_ingest_4'
-        ch_name = 'def_files'
-
-        boss_res_params = BossResParams(
-            coll_name, exp_name, ch_name)
-        boss_res_params.setup_resources(self.rmt, get_only=True)
-
-        headers = {'Authorization': 'Token {}'.format(APITOKEN)}
-        url = '{}collection/{}/experiment/{}/channel/{}'.format(
-            BOSS_URL, coll_name, exp_name, ch_name)
-        r = requests.get(url, headers=headers)
-        self.assertEqual(r.status_code, 200)
-
-        # testing that what is returned by the web api is what we have in our boss resource
-        response = r.json()
-        self.assertEqual(response['experiment'],
-                         boss_res_params.exp_resource.name)
-
-        # testing that what is returned by intern for the channel name matches what is in our boss resource
-        boss_ch_res = self.rmt.get_channel(ch_name, coll_name, exp_name)
-        self.assertEqual(boss_ch_res.name, boss_res_params.ch_resource.name)
+        os.remove(ingest_job.get_log_fname())
 
     def test_create_boss_res(self):
-        coll_name = 'ben_dev'
-        exp_name = 'dev_ingest_4'
-        ch_name = 'def_files'
+        now = datetime.now()
 
-        voxel_size = [1, 1, 1]
-        voxel_unit = 'nanometers'
-        datatype = 'uint16'
-        res = 0
-        img_size = [1000, 1024, 100]
+        args = Namespace(
+            datasource='local',
+            collection='ben_dev',
+            experiment='dev_ingest_4' + now.strftime("%Y%m%d-%H%M%S"),
+            channel='def_files_' + now.strftime("%Y%m%d-%H%M%S"),
+            boss_config_file='neurodata.cfg',
+            voxel_size=[1, 5, 1],
+            voxel_unit='nanometers',
+            datatype='uint16',
+            res=0,
+            x_extent=[0, 1000],
+            y_extent=[0, 1024],
+            z_extent=[0, 100])
 
-        boss_res_params = BossResParams(
-            coll_name, exp_name, ch_name, voxel_size=voxel_size, voxel_unit=voxel_unit, datatype=datatype, res=res, img_size=img_size)
-        boss_res_params.setup_resources(self.rmt, get_only=True)
-        boss_ch_res = self.rmt.get_channel(ch_name, coll_name, exp_name)
-        self.assertEqual(boss_ch_res.name, boss_res_params.ch_resource.name)
-        self.assertEqual(boss_res_params.img_size, img_size)
+        ingest_job = IngestJob(args)
+        boss_res_params = BossResParams(ingest_job, get_only=False)
 
-    def test_create_boss_res_wrong_img_size(self):
-        coll_name = 'ben_dev'
-        exp_name = 'dev_ingest_4'
-        ch_name = 'def_files'
+        assert boss_res_params.ch_resource.name == args.channel
+        assert boss_res_params.exp_resource.hierarchy_method == 'anisotropic'
+        assert ingest_job.x_extent == args.x_extent
+        assert ingest_job.y_extent == args.y_extent
+        assert ingest_job.z_extent == args.z_extent
+        assert ingest_job.voxel_size == args.voxel_size
+        assert ingest_job.voxel_unit == args.voxel_unit
+        assert ingest_job.img_size == [1000, 1024, 100]
+        assert ingest_job.offsets == [0, 0, 0]
+        assert ingest_job.boss_datatype == 'uint16'
+        assert ingest_job.res == 0
+        assert ingest_job.extension is None
+        assert ingest_job.z_step is None
 
-        voxel_size = [1, 1, 1]
-        voxel_unit = 'nanometers'
-        datatype = 'uint16'
-        res = 0
-        img_size = [2000, 1000, 50]
+        os.remove(ingest_job.get_log_fname())
+        boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
+        boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
 
-        boss_res_params = BossResParams(
-            coll_name, exp_name, ch_name, voxel_size=voxel_size, voxel_unit=voxel_unit, datatype=datatype, res=res, img_size=img_size)
-        boss_res_params.setup_resources(self.rmt, get_only=True)
-        self.assertNotEqual(boss_res_params.img_size, img_size)
+    def test_create_boss_res_offsets(self):
+        now = datetime.now()
+
+        args = Namespace(
+            datasource='local',
+            collection='ben_dev',
+            experiment='dev_ingest_neg' + now.strftime("%Y%m%d-%H%M%S"),
+            channel='def_files_' + now.strftime("%Y%m%d-%H%M%S"),
+            boss_config_file='neurodata.cfg',
+            voxel_size=[1, 5, 1],
+            voxel_unit='nanometers',
+            datatype='uint16',
+            res=0,
+            x_extent=[-500, 500],
+            y_extent=[0, 1024],
+            z_extent=[200, 300],
+            offset_extents=True)
+
+        ingest_job = IngestJob(args)
+        boss_res_params = BossResParams(ingest_job, get_only=False)
+
+        assert boss_res_params.coord_frame_resource.z_start == 200
+        assert boss_res_params.coord_frame_resource.z_stop == 300
+        assert boss_res_params.coord_frame_resource.x_start == 0
+        assert boss_res_params.coord_frame_resource.x_stop == 1000
+
+        assert ingest_job.offsets == [500, 0, 0]
+
+        # testing to make sure offsets were recorded properly
+        exp_res = boss_res_params.exp_resource
+        boss_offsets_dict = boss_res_params.rmt.get_metadata(
+            exp_res, ['offsets'])
+        boss_offsets = ast.literal_eval(boss_offsets_dict['offsets'])
+        assert boss_offsets == [500, 0, 0]
+
+        os.remove(ingest_job.get_log_fname())
+        boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
+        boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
+
+    def test_get_boss_res_wrong_img_size(self):
+        now = datetime.now()
+
+        x_extent = [0, 2000]
+        y_extent = [0, 1000]
+        z_extent = [0, 50]
+        voxel_size = [1, 5, 1]
+        args = Namespace(
+            datasource='local',
+            collection='ben_dev',
+            experiment='dev_ingest_4' + now.strftime("%Y%m%d-%H%M%S"),
+            channel='def_files_' + now.strftime("%Y%m%d-%H%M%S"),
+            boss_config_file='neurodata.cfg',
+            voxel_size=voxel_size,
+            voxel_unit='nanometers',
+            datatype='uint16',
+            res=0,
+            x_extent=x_extent,
+            y_extent=y_extent,
+            z_extent=z_extent)
+
+        ingest_job = IngestJob(args)
+        with pytest.raises(HTTPError):
+            boss_res_params = BossResParams(ingest_job, get_only=True)
+
+        os.remove(ingest_job.get_log_fname())
+
+    def test_get_boss_annotation_channel(self):
+        datatype = 'uint64'
+
+        args = Namespace(
+            datasource='local',
+            collection='ben_dev',
+            experiment='dev_ingest_4',
+            channel='def_files_annot',
+            boss_config_file='neurodata.cfg',
+            source_channel='def_files'
+        )
+
+        ingest_job = IngestJob(args)
+
+        boss_res_params = BossResParams(ingest_job, get_only=True)
+
+        assert ingest_job.ch_name == boss_res_params.ch_resource.name
+        assert ingest_job.boss_datatype == datatype
+        assert ingest_job.ch_type == 'annotation'
+        assert boss_res_params.ch_resource.type == 'annotation'
+        assert boss_res_params.ch_resource.sources == [args.source_channel]
+
+        os.remove(ingest_job.get_log_fname())
 
     def test_create_boss_annotation_channel(self):
-        coll_name = 'ben_dev'
-        exp_name = 'dev_ingest_4'
-        ch_name = 'def_files_annotation'
-        source = 'def_files'
+        now = datetime.now()
 
-        voxel_size = [1, 1, 1]
-        voxel_unit = 'micrometers'
         datatype = 'uint64'
-        res = 0
-        img_size = [1000, 1024, 100]
 
-        boss_res_params = BossResParams(
-            coll_name, exp_name, ch_name, voxel_size=voxel_size, voxel_unit=voxel_unit, datatype=datatype, res=res, img_size=img_size, source=source)
-        boss_res_params.setup_resources(self.rmt, get_only=False)
-        boss_ch_res = self.rmt.get_channel(ch_name, coll_name, exp_name)
-        self.assertEqual(boss_ch_res.name, boss_res_params.ch_resource.name)
-        self.assertEqual(boss_res_params.img_size, img_size)
-        self.assertEqual(boss_ch_res.datatype, datatype)
-        self.assertEqual(boss_ch_res.type, 'annotation')
+        args = Namespace(
+            datasource='local',
+            collection='ben_dev',
+            experiment='dev_ingest_4',
+            channel='def_files_annotation_' + now.strftime("%Y%m%d-%H%M%S"),
+            boss_config_file='neurodata.cfg',
+            source_channel='def_files',
+            voxel_size=[1, 1, 1],
+            voxel_unit='micrometers',
+            datatype=datatype,
+            res=0,
+            x_extent=[0, 1000],
+            y_extent=[0, 1024],
+            z_extent=[0, 100])
 
+        ingest_job = IngestJob(args)
 
-if __name__ == '__main__':
-    unittest.main()
+        boss_res_params = BossResParams(ingest_job, get_only=False)
+
+        assert ingest_job.ch_name == boss_res_params.ch_resource.name
+        assert ingest_job.boss_datatype == datatype
+        assert ingest_job.ch_type == 'annotation'
+        assert boss_res_params.ch_resource.type == 'annotation'
+        assert boss_res_params.ch_resource.sources == [args.source_channel]
+
+        os.remove(ingest_job.get_log_fname())
+        boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
