@@ -119,7 +119,7 @@ def assert_equal(boss_res_params, ingest_job, z_rng):
     ingest_job.send_msg(msg)
 
     im_array_boss = download_rand_slice(
-        boss_res_params, ingest_job, im_array_local, rand_slice)
+        boss_res_params, ingest_job, im_array_local, rand_slice + ingest_job.offsets[2])
 
     msg = '{} Z slice from BOSS downloaded'.format(
         get_formatted_datetime())
@@ -158,7 +158,7 @@ def per_channel_ingest(args, channel):
     # this can take a while, as we actually load in the first image slice,
     # so we should store this first slice so we don't have to load it again when we later read the entire chunk in z
     im_width, im_height, im_datatype = ingest_job.get_img_info(
-        ingest_job.z_rng[0])
+        ingest_job.z_range[0])
 
     # we do this before creating boss resources that could be inaccurate
     try:
@@ -185,7 +185,7 @@ def per_channel_ingest(args, channel):
     stride_z = 16
     x_buckets = get_supercube_lims(ingest_job.x_extent, stride_x)
     y_buckets = get_supercube_lims(ingest_job.y_extent, stride_y)
-    z_buckets = get_supercube_lims(ingest_job.z_rng, stride_z)
+    z_buckets = get_supercube_lims(ingest_job.z_range, stride_z)
 
     num_POST_failures = 0
 
@@ -193,7 +193,8 @@ def per_channel_ingest(args, channel):
     for _, z_slices in z_buckets.items():
         # read images into numpy array
         im_array = ingest_job.read_img_stack(z_slices)
-        z_rng = [z_slices[0], z_slices[-1] + 1]
+        z_rng = [z + ingest_job.offsets[2]
+                 for z in [z_slices[0], z_slices[-1] + 1]]
 
         # slice into np array blocks
         for _, y_slices in y_buckets.items():
@@ -210,13 +211,13 @@ def per_channel_ingest(args, channel):
                                                  attempts=3)
 
     # checking data posted correctly for an entire z slice
-    assert_equal(boss_res_params, ingest_job, ingest_job.z_rng)
+    assert_equal(boss_res_params, ingest_job, ingest_job.z_range)
 
     ch_link = (
         'http://ndwt.neurodata.io/channel_detail/{}/{}/{}/').format(ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name)
 
     ingest_job.send_msg('{} Finished z slices {} for Collection: {}, Experiment: {}, Channel: {}\nThere were {} POST failures.\nView properties of channel and start downsample job on ndwebtools: {}'.format(
-        get_formatted_datetime(), ingest_job.z_rng, ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name, num_POST_failures, ch_link), send_slack=True)
+        get_formatted_datetime(), ingest_job.z_range, ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name, num_POST_failures, ch_link), send_slack=True)
 
     return num_POST_failures
 

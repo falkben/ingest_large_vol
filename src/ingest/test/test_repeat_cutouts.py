@@ -1,12 +1,12 @@
-from argparse import Namespace
 import os
+from argparse import Namespace
 
 import numpy as np
 import pytest
 
-from ..src.ingest.boss_resources import BossResParams
-from ..src.ingest.ingest_job import IngestJob
-from ..repeat_cutouts import Cutout, ingest_cuts, parse_cut_line
+from ....repeat_cutouts import Cutout, ingest_cuts, parse_cut_line
+from ..boss_resources import BossResParams
+from ..ingest_job import IngestJob
 from .create_images import del_test_images, gen_images
 
 
@@ -54,6 +54,8 @@ class TestRepeatCutouts:
         assert boss_res_params.exp_resource.name == exp
         assert boss_res_params.ch_resource.name == ch
 
+        os.remove(ingest_job.get_log_fname())
+
     def test_local_ingest_cuts(self):
         cut = create_cutout()
         coll, exp, ch = (cut.collection, cut.experiment, cut.channel)
@@ -79,7 +81,7 @@ class TestRepeatCutouts:
         ingest_job = IngestJob(args)
         boss_res_params = BossResParams(ingest_job, get_only=True)
 
-        gen_images(ingest_job, args.z_range[1])
+        gen_images(ingest_job)
 
         # ingest the cut
         ingest_cuts([cut], ingest_job, boss_res_params)
@@ -96,7 +98,7 @@ class TestRepeatCutouts:
         data_local = im_array[:, cut.y[0]:cut.y[1], cut.x[0]:cut.x[1]]
         assert np.array_equal(data_local, data_boss)
 
-        del_test_images(ingest_job, args.z_range[1])
+        del_test_images(ingest_job)
         os.remove(ingest_job.get_log_fname())
         os.remove(cut.log_fname)
 

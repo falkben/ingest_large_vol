@@ -1,14 +1,15 @@
 import os
+import time
 from argparse import Namespace
 from datetime import datetime
-import time
 
 import numpy as np
 import pytest
 
-from ..src.ingest.boss_resources import BossRemote, BossResParams
-from ..src.ingest.ingest_job import IngestJob
-from ..ingest_large_vol import per_channel_ingest, post_cutout, read_channel_names
+from ....ingest_large_vol import (per_channel_ingest, post_cutout,
+                                  read_channel_names)
+from ..boss_resources import BossResParams
+from ..ingest_job import IngestJob
 from .create_images import del_test_images, gen_images
 
 
@@ -151,7 +152,7 @@ class TestIngestLargeVol:
 
         ingest_job = IngestJob(self.args)
 
-        gen_images(ingest_job, self.args.z_range[1], intensity_range=30)
+        gen_images(ingest_job,  intensity_range=30)
 
         channel = self.args.channel
         result = per_channel_ingest(self.args, channel)
@@ -165,7 +166,7 @@ class TestIngestLargeVol:
         boss_res_params = BossResParams(ingest_job, get_only=True)
         boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
 
-        del_test_images(ingest_job, self.args.z_range[1])
+        del_test_images(ingest_job)
         os.remove(ingest_job.get_log_fname())
 
     def test_read_channel_names(self):
@@ -206,7 +207,7 @@ class TestIngestLargeVol:
         args_uint16 = self.args
         args_uint16.datatype = 'uint16'
         ingest_job_uint16 = IngestJob(args_uint16)
-        gen_images(ingest_job_uint16, args_uint16.z_range[1])
+        gen_images(ingest_job_uint16)
 
         # try to do an 8 bit ingest on a 16 bit resource with 16 bit files
         self.args.datatype = 'uint8'
@@ -215,12 +216,12 @@ class TestIngestLargeVol:
             per_channel_ingest(self.args, self.args.channel)
 
         # cleanup
-        del_test_images(ingest_job_uint16, args_uint16.z_range[1])
+        del_test_images(ingest_job_uint16)
 
         ingest_job = IngestJob(self.args)
         os.remove(ingest_job.get_log_fname())
 
-    def test_per_channel_ingest_neg_extent_no_offset(self):
+    def test_per_channel_ingest_neg_xextent_no_offset(self):
         self.args.experiment = 'test_neg_extent_no_offset'
         self.args.channel = 'def_files'
         self.args.x_extent = [-1000, 0]
@@ -239,7 +240,7 @@ class TestIngestLargeVol:
         with pytest.raises(ValueError):
             self.ingest_test_per_channel(self.args, channels)
 
-    def test_per_channel_ingest_neg_offset(self):
+    def test_per_channel_ingest_neg_x_exent_offset(self):
         now = datetime.now()
 
         self.args.experiment = 'test_neg_offset_' + \
@@ -267,18 +268,48 @@ class TestIngestLargeVol:
             ch_args = self.args
             ch_args.channel = ch
             ingest_job = IngestJob(ch_args)
-            del_test_images(ingest_job, ch_args.z_range[1])
+            del_test_images(ingest_job)
             os.remove(ingest_job.get_log_fname())
             boss_res_params = BossResParams(ingest_job)
             boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
         if len(channels) > 0:
             boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
 
+    def test_per_channel_ingest_neg_z_exent_offset(self):
+        now = datetime.now()
+
+        self.args.experiment = 'test_neg_offset_' + \
+            now.strftime("%Y%m%d-%H%M%S")
+        self.args.channel = 'def_files'
+        self.args.datatype = 'uint8'
+        self.args.z_extent = [-100, 100]
+        self.args.z_range = [-3, 2]
+        self.args.offset_extents = True
+        self.args.extension = 'png'
+
+        ingest_job = IngestJob(self.args)
+        gen_images(ingest_job)
+
+        self.args.create_resources = True
+        result = per_channel_ingest(self.args, self.args.channel)
+        assert result == 0
+
+        self.args.create_resources = False
+        result = per_channel_ingest(self.args, self.args.channel)
+        assert result == 0
+
+        # cleanup
+        del_test_images(ingest_job)
+        os.remove(ingest_job.get_log_fname())
+        boss_res_params = BossResParams(ingest_job)
+        boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
+        boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
+
     def ingest_test_per_channel(self, args, channels):
         for channel in channels:
             args.channel = channel
             ingest_job = IngestJob(args)
-            gen_images(ingest_job, args.z_range[1])
+            gen_images(ingest_job)
             result = per_channel_ingest(args, channel)
             assert result == 0
 

@@ -39,7 +39,7 @@ class IngestJob:
         self.ch_name = args.get('channel')
         self.datatype = args.get('datatype')
         self.warn_missing_files = args.get('warn_missing_files')
-        self.z_rng = args.get('z_range')
+        self.z_range = args.get('z_range')
 
         self.voxel_size = args.get('voxel_size')
         self.voxel_unit = args.get('voxel_unit')
@@ -79,8 +79,8 @@ class IngestJob:
             self.z_step = 1
             # render resource is set to return PNGs
             self.extension = 'png'
-            if self.z_rng is None:  # if the user isn't specifying the z range for ingest, we just get the entire extent
-                self.z_rng = self.z_extent
+            if self.z_range is None:  # if the user isn't specifying the z range for ingest, we just get the entire extent
+                self.z_range = self.z_extent
 
         # otherwise it's image data
         elif self.datasource == 's3' or self.datasource == 'local':
@@ -295,7 +295,7 @@ class IngestJob:
         base_path = self.base_path
         base_fname = self.base_fname
 
-        if z_index >= self.z_rng[1]:
+        if z_index >= self.z_range[1]:
             raise IndexError("Z-index out of range")
 
         matches = re.findall('<(p:\d+)?>', base_fname)

@@ -4,7 +4,6 @@ import os
 import numpy as np
 import png
 import tifffile as tiff
-from PIL import Image
 
 
 def create_img_file(x_size, y_size, dtype, file_format, img_fname, intensity_range=None):
@@ -28,14 +27,14 @@ def create_img_file(x_size, y_size, dtype, file_format, img_fname, intensity_ran
             writer.write(f, ar.tolist())
 
 
-def gen_images(ingest_job, n_images, intensity_range=None):
-    for z in range(0, n_images * ingest_job.z_step, ingest_job.z_step):
+def gen_images(ingest_job, intensity_range=None):
+    for z in range(ingest_job.z_range[0], ingest_job.z_range[1], ingest_job.z_step):
         img_fname = ingest_job.get_img_fname(z)
         create_img_file(ingest_job.img_size[0], ingest_job.img_size[1],
                         ingest_job.datatype, ingest_job.extension, img_fname, intensity_range)
 
 
-def del_test_images(ingest_job, n_images):
-    for z in range(0, n_images * ingest_job.z_step, ingest_job.z_step):
+def del_test_images(ingest_job):
+    for z in range(ingest_job.z_range[0], ingest_job.z_range[1], ingest_job.z_step):
         img_fname = ingest_job.get_img_fname(z)
         os.remove(img_fname)

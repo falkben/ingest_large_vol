@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from ..src.ingest.ingest_job import IngestJob
+from ..ingest_job import IngestJob
 from .create_images import create_img_file, del_test_images, gen_images
 
 
@@ -72,8 +72,36 @@ class TestIngestJob:
 
         os.remove(ingest_job.get_log_fname())
 
-    def test_create_local_ingestJob_neg_z_extents_offset_range(self):
-        pass
+    def test_create_local_IngestJob_pos_extents_offset(self):
+        self.args.x_extent = [1000, 2000]
+        self.args.offset_extents = True
+
+        ingest_job = IngestJob(self.args)
+
+        assert ingest_job.offsets == [0, 0, 0]
+        assert ingest_job.x_extent == [1000, 2000]
+
+        os.remove(ingest_job.get_log_fname())
+
+    def test_create_local_IngestJob_neg_z_extents_offset_range(self):
+        self.args.z_extent = [-1000, 2000]
+        self.args.z_range = [-10, 10]
+        self.args.offset_extents = True
+
+        ingest_job = IngestJob(self.args)
+
+        assert ingest_job.x_extent == [0, 1000]
+        assert ingest_job.offsets == [0, 0, 1000]
+        assert ingest_job.z_extent == [0, 3000]
+        assert ingest_job.z_range == [-10, 10]
+
+        img_fname = ingest_job.get_img_fname(-5)
+        # assert that first tif image has a file name with the negative original extent of the data
+        img_fname_test = '{}img_{:04d}.{}'.format(
+            self.args.base_path, -5, self.args.extension)
+        assert img_fname == img_fname_test
+
+        os.remove(ingest_job.get_log_fname())
 
     def test_create_local_IngestJob_annotation(self):
         self.args.source_channel = 'def_files'
@@ -122,7 +150,7 @@ class TestIngestJob:
         assert ingest_job.render_obj.tile_width == 2048
         assert ingest_job.render_obj.tile_height == 2047
 
-        assert ingest_job.z_rng == [0, 1]  # from our params in setup
+        assert ingest_job.z_range == [0, 1]  # from our params in setup
         os.remove(ingest_job.get_log_fname())
 
     def test_create_render_scale_quarter_IngestJob(self):
@@ -139,7 +167,7 @@ class TestIngestJob:
         assert ingest_job.render_obj.tile_width == 2048
         assert ingest_job.render_obj.tile_height == 2047
 
-        assert ingest_job.z_rng == [0, 1]  # from our params in setup
+        assert ingest_job.z_range == [0, 1]  # from our params in setup
         os.remove(ingest_job.get_log_fname())
 
     def test_create_render_window_IngestJob(self):
@@ -373,7 +401,7 @@ class TestIngestJob:
         ingest_job = IngestJob(self.args)
 
         # generate some images
-        gen_images(ingest_job, self.args.z_range[1])
+        gen_images(ingest_job)
 
         # load images into memory using ingest_job
         z_slices = range(self.args.z_range[0], self.args.z_range[1])
@@ -385,5 +413,5 @@ class TestIngestJob:
             with Image.open(img_fname) as im:
                 assert np.array_equal(im_array[z, :, :], im)
 
-        del_test_images(ingest_job, self.args.z_range[1])
+        del_test_images(ingest_job)
         os.remove(ingest_job.get_log_fname())

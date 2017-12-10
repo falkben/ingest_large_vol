@@ -6,8 +6,8 @@ from datetime import datetime
 import pytest
 from requests import HTTPError
 
-from ..src.ingest.boss_resources import BossRemote, BossResParams
-from ..src.ingest.ingest_job import IngestJob
+from ..boss_resources import BossResParams
+from ..ingest_job import IngestJob
 
 BOSS_URL = 'https://api.boss.neurodata.io/latest/'
 

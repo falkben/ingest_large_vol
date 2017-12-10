@@ -5,7 +5,7 @@ import pytest
 import requests
 from PIL import Image
 
-from ..src.ingest.render_resource import renderResource
+from ..render_resource import renderResource
 
 
 class TestRenderResource:
@@ -66,6 +66,7 @@ class TestRenderResource:
         # GET /v1/owner/{owner}/project/{project}/stack/{stack}/z/{z}/box/{x},{y},{width},{height},{scale}/png-image
         tile_url = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image'.format(
             self.baseURL, self.owner, self.project, self.stack, z, x, y, x_width, y_width, self.scale)
+        print(tile_url)
         r = requests.get(tile_url)
         with open(test_img_fn, "wb") as file:
             file.write(r.content)
@@ -76,7 +77,6 @@ class TestRenderResource:
 
         render_obj = renderResource(
             self.owner, self.project, self.stack, self.baseURL, scale=self.scale)
-
         data = render_obj.get_render_tile(z, x, y, x_width, y_width)
 
         assert data.shape == (y_width, x_width)
@@ -104,12 +104,10 @@ class TestRenderResource:
 
         render_obj = renderResource(
             self.owner, self.project, self.stack, self.baseURL, scale=self.scale)
-
         data = render_obj.get_render_tile(
             z, x, y, x_width, y_width, window)
 
         assert data.shape == (y_width, x_width)
-
         assert np.array_equal(data, test_data)
 
     def test_get_render_img(self):
