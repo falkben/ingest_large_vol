@@ -18,7 +18,7 @@ from slacker import Slacker
 
 try:
     from render_resource import renderResource
-except ModuleNotFoundError:
+except ImportError:
     from .render_resource import renderResource
 
 
@@ -246,7 +246,7 @@ class IngestJob:
     def load_img(self, z_slice):
         if self.datasource == 'render':
             # download the slice from render server
-            return self.render_obj.get_render_img(z_slice)
+            return self.load_render_slice(z_slice)
 
         # if it's not render datasource, we are working with images in some form
         img_fname = self.get_img_fname(z_slice)

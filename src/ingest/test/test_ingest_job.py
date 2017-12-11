@@ -267,6 +267,24 @@ class TestIngestJob:
         assert im_datatype == self.args.datatype
         os.remove(ingest_job.get_log_fname())
 
+    def test_get_img_info_render_neg_extents(self):
+        self.set_render_args()
+        self.args.offset_extents = True
+        self.args.render_stack = 'Stitched_DAPI_1_Lowres_RoughAligned'
+
+        ingest_job = IngestJob(self.args)
+
+        assert ingest_job.render_obj.x_rng_unscaled == [-3534, 12469]
+        assert ingest_job.render_obj.y_rng_unscaled == [-7196, 7734]
+
+        z_slice = ingest_job.z_range[0]
+        im_width, im_height, im_datatype = ingest_job.get_img_info(z_slice)
+
+        assert im_width == ingest_job.img_size[0]
+        assert im_height == ingest_job.img_size[1]
+        assert im_datatype == self.args.datatype
+        os.remove(ingest_job.get_log_fname())
+
     def test_get_img_info_uint8_tif(self):
         dtype = 'uint8'
         self.args.datatype = dtype

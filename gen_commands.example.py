@@ -97,6 +97,8 @@ offset_extents = False
 # first inclusive, last _exclusive_ list of sections to ingest for _this_ job (can be negative)
 # typically the same as Z "extent"
 zrange = [0, Z]
+# if it's a render source, we (optionally) can get the full z range from the metadata (forces single worker)
+# zrange = None
 
 # Number of workers to use
 # each worker loads additional 16 image files so watch out for out of memory errors
@@ -107,99 +109,111 @@ workers = 4
 
 
 def gen_comm(zstart, zend):
-    cmd = "python " + script + " "
-    cmd += ' --datasource ' + source_type
+    cmd = "python {}".format(script)
+    cmd += ' --datasource {}'.format(source_type)
     if source_type != 'render':
         if os.name == 'nt':
-            cmd += ' --base_path ' + list2cmdline([data_directory])
-            cmd += ' --base_filename ' + list2cmdline([file_name])
+            cmd += ' --base_path {}'.format(list2cmdline([data_directory]))
+            cmd += ' --base_filename {}'.format(list2cmdline([file_name]))
         else:
-            cmd += ' --base_path ' + shlex.quote(data_directory)
-            cmd += ' --base_filename ' + shlex.quote(file_name)
-        cmd += ' --extension ' + file_format
-        cmd += ' ----x_extent ' + x_extent
-        cmd += ' ----y_extent ' + y_extent
-        cmd += ' ----z_extent ' + z_extent
+            cmd += ' --base_path {}'.format(shlex.quote(data_directory))
+            cmd += ' --base_filename {}'.format(shlex.quote(file_name))
+        cmd += ' --extension {}'.format(file_format)
+        cmd += ' --x_extent {}'.format(x_extent)
+        cmd += ' --y_extent {}'.format(y_extent)
+        cmd += ' --z_extent {}'.format(z_extent)
         cmd += ' --z_range %d %d ' % (zstart, zend)
-        cmd += ' --z_step ' + z_step
+        cmd += ' --z_step {}'.format(z_step)
         cmd += ' --warn_missing_files'
 
     if offset_extents:
         cmd += ' --offset_extents'
 
     if source_type == 's3':
-        cmd += " --s3_bucket_name " + s3_bucket_name
-        cmd += ' --aws_profile ' + aws_profile
+        cmd += " --s3_bucket_name {}".format(s3_bucket_name)
+        cmd += ' --aws_profile {}'.format(aws_profile)
 
     if source_type == 'render':
-        cmd += ' --render_owner ' + render_owner
-        cmd += ' --render_project ' + render_project
-        cmd += ' --render_stack ' + render_stack
-        cmd += ' --render_baseURL ' + render_baseURL
-        cmd += ' --render_scale ' + render_scale
-        cmd += ' --render_window ' + render_window
+        cmd += ' --render_owner {}'.format(render_owner)
+        cmd += ' --render_project {}'.format(render_project)
+        cmd += ' --render_stack {}'.format(render_stack)
+        cmd += ' --render_baseURL {}'.format(render_baseURL)
+        cmd += ' --render_scale {}'.format(render_scale)
+        if render_window is not None:
+            cmd += ' --render_window {}'.format(render_window)
 
-    cmd += ' --collection ' + collection
-    cmd += ' --experiment ' + experiment
+    cmd += ' --collection {}'.format(collection)
+    cmd += ' --experiment {}'.format(experiment)
     if channel is not None:
-        cmd += ' --channel ' + channel
+        cmd += ' --channel {}'.format(channel)
     else:
-        cmd += ' --channels_list_file ' + channels_list_file
-    cmd += ' --voxel_size ' + voxel_size
-    cmd += ' --voxel_unit ' + voxel_unit
-    cmd += ' --datatype ' + data_type
+        cmd += ' --channels_list_file {}'.format(channels_list_file)
+    cmd += ' --voxel_size {}'.format(voxel_size)
+    cmd += ' --voxel_unit {}'.format(voxel_unit)
+    cmd += ' --datatype {}'.format(data_type)
     if reference_channel is not None:
-        cmd += ' --source_channel ' + reference_channel
-    cmd += ' --boss_config_file ' + boss_config_file
+        cmd += ' --source_channel {}'.format(reference_channel)
+    cmd += ' --boss_config_file {}'.format(boss_config_file)
 
     if slack_token != '' and slack_username != '':
-        cmd += ' --slack_token_file ' + slack_token
-        cmd += " --slack_usr " + slack_username
+        cmd += ' --slack_token_file {}'.format(slack_token)
+        cmd += " --slack_usr {}".format(slack_username)
 
     return cmd
 
 
-range_per_worker = (zrange[1] - zrange[0]) // workers
+if zrange:
+    # generate command with zrange
+    range_per_worker = (zrange[1] - zrange[0]) // workers
 
-print("# Range per worker: ", range_per_worker)
+    print("# Range per worker: ", range_per_worker)
 
-if range_per_worker % 16:  # supercuboids are 16 z slices
-    range_per_worker = ((range_per_worker // 16) + 1) * 16
+    if range_per_worker % 16:  # supercuboids are 16 z slices
+        range_per_worker = ((range_per_worker // 16) + 1) * 16
 
-print("# Range per worker (rounded up): ", range_per_worker)
+    print("# Range per worker (rounded up): ", range_per_worker)
 
-# amount of memory per worker
-ddim_xy = [x_extent[1] - x_extent[0], y_extent[1] - y_extent[0]]
-if data_type == 'uint8':
-    mult = 1
-elif data_type == 'uint16':
-    mult = 2
-elif data_type == 'uint64':
-    mult = 8
-mem_per_w = ddim_xy[0] * ddim_xy[1] * mult * 16 / 1024 / 1024 / 1024
-print('# Expected memory usage per worker {:.1f} GB'.format(mem_per_w))
+    # amount of memory per worker
+    ddim_xy = [x_extent[1] - x_extent[0], y_extent[1] - y_extent[0]]
+    if data_type == 'uint8':
+        mult = 1
+    elif data_type == 'uint16':
+        mult = 2
+    elif data_type == 'uint64':
+        mult = 8
+    mem_per_w = ddim_xy[0] * ddim_xy[1] * mult * 16 / 1024 / 1024 / 1024
+    print('# Expected memory usage per worker {:.1f} GB'.format(mem_per_w))
 
-# amount of memory total
-mem_tot = mem_per_w * workers
-print('# Expected total memory usage: {:.1f} GB'.format(mem_tot))
+    # amount of memory total
+    mem_tot = mem_per_w * workers
+    print('# Expected total memory usage: {:.1f} GB'.format(mem_tot))
 
+    cmd = gen_comm(zrange[0], zrange[1])
+    cmd += ' --create_resources'
+    print('\n' + cmd + '\n')
 
-cmd = gen_comm(zrange[0], zrange[1])
-cmd += ' --create_resources '
-print('\n' + cmd + '\n')
+    for worker in range(workers):
+        start_z = max((worker * range_per_worker +
+                       zrange[0]) // 16 * 16, zrange[0])
+        if start_z < zrange[0]:
+            start_z = zrange[0]
+        if start_z > zrange[1]:
+            # No point start a useless thread
+            continue
 
-for worker in range(workers):
-    start_z = max((worker * range_per_worker +
-                   zrange[0]) // 16 * 16, zrange[0])
-    if start_z < zrange[0]:
-        start_z = zrange[0]
-    if start_z > zrange[1]:
-        # No point start a useless thread
-        continue
+        next_z = ((worker + 1) * range_per_worker + zrange[0]) // 16 * 16
+        end_z = min(zrange[1], next_z)
 
-    next_z = ((worker + 1) * range_per_worker + zrange[0]) // 16 * 16
-    end_z = min(zrange[1], next_z)
+        cmd = gen_comm(start_z, end_z)
+        cmd += " &"
+        print(cmd + '\n')
 
-    cmd = gen_comm(start_z, end_z)
-    cmd += " &"
+else:
+    # generate a single command without zrange
+    cmd = gen_comm(None, None)
+    cmd += ' --create_resources'
+    print(cmd + '\n')
+
+    cmd = gen_comm(None, None)
+    cmd += ' &'
     print(cmd + '\n')

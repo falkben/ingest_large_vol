@@ -9,7 +9,7 @@ try:
     from src.ingest.ingest_job import IngestJob
     from ingest_large_vol import post_cutout
     from parse_log import parse_log
-except ModuleNotFoundError:
+except ImportError:
     from .src.ingest.boss_resources import BossResParams
     from .src.ingest.ingest_job import IngestJob
     from .ingest_large_vol import post_cutout

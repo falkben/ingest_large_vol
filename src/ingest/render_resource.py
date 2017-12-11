@@ -88,8 +88,8 @@ class renderResource:
 
         # we'll break apart our request into a series of tiles
         # these will extend past the extent of the underlying data
-        stride_width = round(self.tile_width * self.scale)
-        stride_height = round(self.tile_height * self.scale)
+        stride_width = 2048
+        stride_height = 2048
         x_buckets = get_supercubes(
             self.x_rng_unscaled, stride=stride_width)
         y_buckets = get_supercubes(
@@ -122,9 +122,9 @@ class renderResource:
             im_array[y - self.y_rng[0]:y - self.y_rng[0] + y_width,
                      x - self.x_rng[0]: x - self.x_rng[0] + x_width] = data
 
-        # we finally clip the data to the bounds of the scaled data
-        im_array = im_array[self.y_rng[0]:self.y_rng[1],
-                            self.x_rng[0]:self.x_rng[1]]
+        # we finally clip the data to the bounds of the scaled data (while dealing with offsets)
+        im_array = im_array[self.y_rng[0] - self.y_rng[0]:self.y_rng[1] - self.y_rng[0],
+                            self.x_rng[0] - self.x_rng[0]:self.x_rng[1] - self.x_rng[0]]
         return im_array
 
 

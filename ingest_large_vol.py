@@ -17,7 +17,7 @@ try:
     # for command line usage
     from src.ingest.boss_resources import BossResParams
     from src.ingest.ingest_job import IngestJob
-except ModuleNotFoundError:
+except ImportError:
     # for imports from tests
     from .src.ingest.boss_resources import BossResParams
     from .src.ingest.ingest_job import IngestJob
