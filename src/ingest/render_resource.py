@@ -67,7 +67,7 @@ class renderResource:
         self.tile_width = round(stats['maxTileWidth'])
         self.tile_height = round(stats['maxTileHeight'])
 
-    def get_render_tile(self, z, x, y, x_width, y_width, window=None):
+    def get_render_tile(self, z, x, y, x_width, y_width, window=None, attempts=5):
         # note that this returns data at scaled resolution, from box coords of unscaled res
 
         # GET /v1/owner/{owner}/project/{project}/stack/{stack}/z/{z}/box/{x},{y},{width},{height},{scale}/png-image
@@ -76,10 +76,22 @@ class renderResource:
         if window is not None:
             imgURL += '?minIntesnity={}&maxIntensity={}'.format(
                 window[0], window[1])
-        r = self.session.get(imgURL, timeout=10)
-        if r.status_code != 200:
+        for attempt in range(attempts):
+            try:
+                r = self.session.get(imgURL, timeout=10)
+                if r.status_code != 200:
+                    raise ConnectionError(
+                        'Data not fetched with error: {}'.format(r.reason))
+            except ConnectionError:
+                if attempt != attempts - 1:
+                    time.sleep(2**(attempt + 1))
+            else:
+                break
+        else:
+            # we failed all the attempts - deal with the consequences.
             raise ConnectionError(
                 'Data not fetched with error: {}'.format(r.reason))
+
         im_obj = io.BytesIO(r.content)
         return np.array(Image.open(im_obj))[:, :, 0]
 
