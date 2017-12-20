@@ -25,7 +25,7 @@ from PIL import Image
 
 
 class renderResource:
-    def __init__(self, owner, project, stack, baseURL, scale=None):
+    def __init__(self, owner, project, stack, baseURL, channel=None, scale=None):
         self.owner = owner
         self.project = project
         self.stack = stack
@@ -40,7 +40,14 @@ class renderResource:
 
         self.set_metadata()
 
+        if channel:
+            assert channel in self.channel_names
+
+        # defaults to None
+        self.channel = channel
+
     def set_metadata(self):
+        # even if you have a channel the metadata is located at the stack level
         metaURL = '{}owner/{}/project/{}/stack/{}'.format(
             self.baseURL, self.owner, self.project, self.stack)
         r = self.session.get(metaURL, timeout=10)
@@ -67,12 +74,24 @@ class renderResource:
         self.tile_width = round(stats['maxTileWidth'])
         self.tile_height = round(stats['maxTileHeight'])
 
+        channels = stats['channelNames']
+        self.channel_names = channels
+
     def get_render_tile(self, z, x, y, x_width, y_width, window=None, attempts=5):
         # note that this returns data at scaled resolution, from box coords of unscaled res
 
         # GET /v1/owner/{owner}/project/{project}/stack/{stack}/z/{z}/box/{x},{y},{width},{height},{scale}/png-image
-        imgURL = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image'.format(
-            self.baseURL, self.owner, self.project, self.stack, z, x, y, x_width, y_width, self.scale)
+        imgURL = '{}owner/{}/project/{}/stack/{}'
+        if self.channel:
+            imgURL += '/channel/{}'
+            img_args = [self.baseURL, self.owner, self.project, self.stack,
+                        self.channel, z, x, y, x_width, y_width, self.scale]
+        else:
+            img_args = [self.baseURL, self.owner, self.project,
+                        self.stack, z, x, y, x_width, y_width, self.scale]
+        imgURL += '/z/{}/box/{},{},{},{},{}/png-image'
+
+        imgURL = imgURL.format(*img_args)
         if window is not None:
             imgURL += '?minIntesnity={}&maxIntensity={}'.format(
                 window[0], window[1])

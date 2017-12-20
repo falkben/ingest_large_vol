@@ -35,6 +35,29 @@ class TestRenderResource:
         assert render_obj.tile_width == 2048
         assert render_obj.tile_width == 2048
 
+    def test_create_render_resource_channel(self):
+        owner = 'Forrest'
+        project = 'M247514_Rorb_1'
+        stack = 'Site3Align2_LENS_Session1'
+        channel = 'DAPI1'
+
+        render_obj = renderResource(
+            owner, project, stack, self.baseURL, channel=channel, scale=self.scale)
+
+        assert render_obj.x_rng == [-27814, 63396]
+        assert render_obj.y_rng == [-67750, 69698]
+        assert render_obj.z_rng == [0, 49]
+
+    def test_create_render_resource_wrong_channel(self):
+        owner = 'Forrest'
+        project = 'M247514_Rorb_1'
+        stack = 'Site3Align2_LENS_Session1'
+        channel = 'notAchannel'
+
+        with pytest.raises(AssertionError):
+            renderResource(owner, project, stack, self.baseURL,
+                           channel=channel, scale=self.scale)
+
     def test_broken_resource(self):
         owner = '6_ribbon_experiments'
         project = 'M321160_Ai139_smallvol'
