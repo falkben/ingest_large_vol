@@ -35,14 +35,18 @@ class TestRenderResource:
         assert render_obj.tile_width == 2048
         assert render_obj.tile_width == 2048
 
-    def test_create_render_resource_channel(self):
-        owner = 'Forrest'
-        project = 'M247514_Rorb_1'
-        stack = 'Site3Align2_LENS_Session1'
-        channel = 'DAPI1'
+    def setup_render_channel(self):
+        self.owner = 'Forrest'
+        self.project = 'M247514_Rorb_1'
+        self.stack = 'Site3Align2_LENS_Session1'
+        self.channel = 'DAPI1'
 
+    def test_create_render_resource_channel(self):
+        # metadata:
+        # http://render-dev-eric.neurodata.io/render-ws/v1/owner/Forrest/project/M247514_Rorb_1/stack/Site3Align2_LENS_Session1
+        self.setup_render_channel()
         render_obj = renderResource(
-            owner, project, stack, self.baseURL, channel=channel, scale=self.scale)
+            self.owner, self.project, self.stack, self.baseURL, channel=self.channel, scale=self.scale)
 
         assert render_obj.x_rng == [-27814, 63396]
         assert render_obj.y_rng == [-67750, 69698]
@@ -133,6 +137,38 @@ class TestRenderResource:
         assert data.shape == (y_width, x_width)
         assert np.array_equal(data, test_data)
 
+    def test_get_render_tile_channel(self):
+        self.setup_render_channel()
+        render_obj = renderResource(
+            self.owner, self.project, self.stack, self.baseURL, channel=self.channel, scale=self.scale)
+
+        x = 1024
+        y = 512
+        z = 17
+        x_width = 512
+        y_width = 1024
+        window = [0, 10000]
+        test_img_fn = 'local_img_test_data\\render_tile_channel.png'
+
+        # GET /v1/owner/{owner}/project/{project}/stack/{stack}/z/{z}/box/{x},{y},{width},{height},{scale}/png-image
+        tile_url = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image?channel={}?minIntesnity={}&maxIntensity={}'.format(
+            self.baseURL, self.owner, self.project, self.stack, z, x, y, x_width, y_width, self.scale, self.channel, window[0], window[1])
+
+        r = requests.get(tile_url)
+        with open(test_img_fn, "wb") as file:
+            file.write(r.content)
+
+        test_img = Image.open(test_img_fn)
+        # dim 3 is RGBA (A=alpha), for grayscale, RGB values are all the same
+        test_data = np.asarray(test_img)[:, :, 0]
+
+        # getting tile from render resource
+        data = render_obj.get_render_tile(
+            z, x, y, x_width, y_width, window)
+
+        assert data.shape == (y_width, x_width)
+        assert np.array_equal(data, test_data)
+
     def test_get_render_img(self):
         test_img_fn = 'local_img_test_data\\render_img_test.png'
         z = 200
@@ -162,6 +198,23 @@ class TestRenderResource:
 
         assert np.array_equal(data, test_data)
 
+    def test_get_render_scaled_img_channel(self):
+        test_img_fn = 'local_img_test_data\\render_img_test_scale_channel.png'
+        self.scale = .01
+
+        z = 200
+        window = [0, 5000]
+
+        self.setup_render_channel()
+        render_obj = renderResource(
+            self.owner, self.project, self.stack, self.baseURL, channel=self.channel, scale=self.scale)
+
+        data = render_obj.get_render_img(
+            z, dtype='uint8', window=window, threads=8)
+
+        assert data.shape == (sum(map(abs, render_obj.y_rng)),
+                              sum(map(abs, render_obj.x_rng)))
+
     def test_get_render_scaled_img(self):
         test_img_fn = 'local_img_test_data\\render_img_test_scale.png'
         self.scale = .25
@@ -185,10 +238,6 @@ class TestRenderResource:
 
         data = render_obj.get_render_img(
             z, dtype='uint8', window=window, threads=8)
-
-        img_render_data = Image.fromarray(data)
-        img_render_data.save(
-            'local_img_test_data\\render_img_test_scale_test.png')
 
         assert data.shape == test_data.shape
         assert np.array_equal(data, test_data)

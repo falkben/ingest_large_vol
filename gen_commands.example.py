@@ -22,6 +22,7 @@ aws_profile = "default"
 render_owner = 'OWNER_NAME'
 render_project = 'PROJECT_NAME'
 render_stack = 'STACK_NAME'
+render_channel = 'CHANNEL_NAME'  # can be None if no channels in the stack
 render_baseURL = 'BASEURL'
 render_scale = 1  # 1 is full resolution, .5 is downsampled in half. None is scale = 1
 render_window = '0 10000'  # set to None no windowing will be applied for 16bit to 8bit
@@ -102,6 +103,7 @@ zrange = [0, Z]
 
 # Number of workers to use
 # each worker loads additional 16 image files so watch out for out of memory errors
+# ignored if zrange is None
 workers = 4
 
 

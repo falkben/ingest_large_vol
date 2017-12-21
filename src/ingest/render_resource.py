@@ -81,23 +81,23 @@ class renderResource:
         # note that this returns data at scaled resolution, from box coords of unscaled res
 
         # GET /v1/owner/{owner}/project/{project}/stack/{stack}/z/{z}/box/{x},{y},{width},{height},{scale}/png-image
-        imgURL = '{}owner/{}/project/{}/stack/{}'
-        if self.channel:
-            imgURL += '/channel/{}'
-            img_args = [self.baseURL, self.owner, self.project, self.stack,
-                        self.channel, z, x, y, x_width, y_width, self.scale]
-        else:
-            img_args = [self.baseURL, self.owner, self.project,
-                        self.stack, z, x, y, x_width, y_width, self.scale]
-        imgURL += '/z/{}/box/{},{},{},{},{}/png-image'
+        img_URL = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image'.format(
+            self.baseURL, self.owner, self.project, self.stack, z, x, y, x_width, y_width, self.scale)
 
-        imgURL = imgURL.format(*img_args)
+        params = []
+        if self.channel is not None:
+            params.append('channel={}'.format(self.channel))
+
         if window is not None:
-            imgURL += '?minIntesnity={}&maxIntensity={}'.format(
-                window[0], window[1])
+            params.append('minIntesnity={}&maxIntensity={}'.format(
+                window[0], window[1]))
+
+        if params:
+            img_URL += '?' + '&'.join(params)
+
         for attempt in range(attempts):
             try:
-                r = self.session.get(imgURL, timeout=10)
+                r = self.session.get(img_URL, timeout=10)
                 if r.status_code != 200:
                     raise ConnectionError(
                         'Data not fetched with error: {}'.format(r.reason))
