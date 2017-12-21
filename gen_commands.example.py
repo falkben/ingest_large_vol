@@ -24,7 +24,8 @@ render_project = 'PROJECT_NAME'
 render_stack = 'STACK_NAME'
 render_channel = 'CHANNEL_NAME'  # can be None if no channels in the stack
 render_baseURL = 'BASEURL'
-render_scale = 1  # 1 is full resolution, .5 is downsampled in half. None is scale = 1
+# 1 is full resolution, .5 is downsampled in half. None is scale = 1. Powers of 2 (e.g. .5, .25, .125)
+render_scale = 1
 render_window = '0 10000'  # set to None no windowing will be applied for 16bit to 8bit
 
 

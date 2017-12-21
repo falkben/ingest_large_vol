@@ -1,4 +1,4 @@
-import os
+from io import BytesIO
 
 import numpy as np
 import pytest
@@ -139,15 +139,16 @@ class TestRenderResource:
 
     def test_get_render_tile_channel(self):
         self.setup_render_channel()
+        self.scale = .125
         render_obj = renderResource(
             self.owner, self.project, self.stack, self.baseURL, channel=self.channel, scale=self.scale)
 
-        x = 1024
-        y = 512
-        z = 17
-        x_width = 512
+        x = 4200
+        y = 6500
+        z = 24
+        x_width = 1024
         y_width = 1024
-        window = [0, 10000]
+        window = [0, 5000]
         test_img_fn = 'local_img_test_data\\render_tile_channel.png'
 
         # GET /v1/owner/{owner}/project/{project}/stack/{stack}/z/{z}/box/{x},{y},{width},{height},{scale}/png-image
@@ -166,11 +167,10 @@ class TestRenderResource:
         data = render_obj.get_render_tile(
             z, x, y, x_width, y_width, window)
 
-        assert data.shape == (y_width, x_width)
+        assert data.shape == (y_width * self.scale, x_width * self.scale)
         assert np.array_equal(data, test_data)
 
     def test_get_render_img(self):
-        test_img_fn = 'local_img_test_data\\render_img_test.png'
         z = 200
         window = [0, 5000]
 
@@ -183,26 +183,19 @@ class TestRenderResource:
             render_obj.x_rng[1], render_obj.y_rng[1],
             self.scale, window[0], window[1])
         r = requests.get(render_url)
-        with open(test_img_fn, "wb") as file:
-            file.write(r.content)
-
-        test_img = Image.open(test_img_fn)
+        test_img = Image.open(BytesIO(r.content))
         test_data = np.asarray(test_img)[:, :, 0]
 
         data = render_obj.get_render_img(
             z, dtype='uint8', window=window, threads=8)
 
-        img_render_data = Image.fromarray(data)
-        img_render_data.save(
-            'local_img_test_data\\render_img_test_test.png')
-
         assert np.array_equal(data, test_data)
 
     def test_get_render_scaled_img_channel(self):
         test_img_fn = 'local_img_test_data\\render_img_test_scale_channel.png'
-        self.scale = .01
+        self.scale = 0.5
 
-        z = 200
+        z = 20
         window = [0, 5000]
 
         self.setup_render_channel()
@@ -212,11 +205,31 @@ class TestRenderResource:
         data = render_obj.get_render_img(
             z, dtype='uint8', window=window, threads=8)
 
-        assert data.shape == (sum(map(abs, render_obj.y_rng)),
-                              sum(map(abs, render_obj.x_rng)))
+        render_url = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image?minIntesnity={}&maxIntensity={}&channel={}'.format(
+            self.baseURL, self.owner, self.project, self.stack, z,
+            render_obj.x_rng_unscaled[0], render_obj.y_rng_unscaled[0],
+            sum(map(abs, render_obj.x_rng_unscaled)),
+            sum(map(abs, render_obj.y_rng_unscaled)),
+            self.scale, window[0], window[1], self.channel)
+
+        print(render_url)
+
+        r = requests.get(render_url, timeout=30)
+        test_img = Image.open(BytesIO(r.content))
+        test_data = np.asarray(test_img)[:, :, 0]
+
+        # for comparison:
+        # test_img = Image.fromarray(test_data)
+        # test_img.save(test_img_fn)
+
+        # rend_img = Image.fromarray(data)
+        # rend_img.save(test_img_fn[0:-4] + '_rend_res.png')
+
+        assert data.shape == test_data.shape
+        assert np.sum(data) == np.sum(test_data)
+        assert np.array_equal(data, test_data)
 
     def test_get_render_scaled_img(self):
-        test_img_fn = 'local_img_test_data\\render_img_test_scale.png'
         self.scale = .25
         z = 200
         window = [0, 5000]
@@ -230,10 +243,8 @@ class TestRenderResource:
             render_obj.x_rng_unscaled[1], render_obj.y_rng_unscaled[1],
             self.scale, window[0], window[1])
         r = requests.get(render_url)
-        with open(test_img_fn, "wb") as file:
-            file.write(r.content)
 
-        test_img = Image.open(test_img_fn)
+        test_img = Image.open(BytesIO(r.content))
         test_data = np.asarray(test_img)[:, :, 0]
 
         data = render_obj.get_render_img(

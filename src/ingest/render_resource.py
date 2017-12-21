@@ -147,15 +147,15 @@ class renderResource:
         for idx, data in enumerate(data_array):
             _, x, y, x_width, y_width, _ = args[idx]
             # have to scale the box to fit the data inside
-            x, y = [
+            x_s, y_s = [
                 round(a * self.scale) for a in [x, y]]
             y_width, x_width = data.shape
-            im_array[y - self.y_rng[0]:y - self.y_rng[0] + y_width,
-                     x - self.x_rng[0]: x - self.x_rng[0] + x_width] = data
+            im_array[y_s - self.y_rng[0]:y_s - self.y_rng[0] + y_width,
+                     x_s - self.x_rng[0]:x_s - self.x_rng[0] + x_width] = data
 
         # we finally clip the data to the bounds of the scaled data (while dealing with offsets)
-        im_array = im_array[self.y_rng[0] - self.y_rng[0]:self.y_rng[1] - self.y_rng[0],
-                            self.x_rng[0] - self.x_rng[0]:self.x_rng[1] - self.x_rng[0]]
+        im_array = im_array[0:self.y_rng[1] - self.y_rng[0],
+                            0:self.x_rng[1] - self.x_rng[0]]
         return im_array
 
 
