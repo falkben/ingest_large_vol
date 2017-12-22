@@ -89,7 +89,7 @@ class renderResource:
             params.append('channel={}'.format(self.channel))
 
         if window is not None:
-            params.append('minIntesnity={}&maxIntensity={}'.format(
+            params.append('minIntensity={}&maxIntensity={}'.format(
                 window[0], window[1]))
 
         if params:
