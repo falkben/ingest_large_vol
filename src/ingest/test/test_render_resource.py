@@ -179,41 +179,41 @@ class TestRenderResource:
 
         assert np.array_equal(data, test_data)
 
-    def test_get_render_scaled_img_channel(self):
-        self.scale = .125
-        z = 20
-        window = [0, 5000]
+    # def test_get_render_scaled_tile_channel(self):
+    #     self.scale = .125
+    #     z = 20
+    #     window = [0, 5000]
 
-        self.setup_render_channel()
-        render_obj = renderResource(
-            self.owner, self.project, self.stack, self.baseURL, channel=self.channel, scale=self.scale)
+    #     self.setup_render_channel()
+    #     render_obj = renderResource(
+    #         self.owner, self.project, self.stack, self.baseURL, channel=self.channel, scale=self.scale)
 
-        data = render_obj.get_render_img(z, dtype='uint8', window=window)
+    #     data = render_obj.get_render_img(z, dtype='uint8', window=window)
 
-        render_url = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image?channel={}&minIntensity={}&maxIntensity={}'.format(
-            self.baseURL, self.owner, self.project, self.stack, z,
-            render_obj.x_rng_unscaled[0], render_obj.y_rng_unscaled[0],
-            sum(map(abs, render_obj.x_rng_unscaled)),
-            sum(map(abs, render_obj.y_rng_unscaled)),
-            self.scale, self.channel, window[0], window[1])
+    #     render_url = '{}owner/{}/project/{}/stack/{}/z/{}/box/{},{},{},{},{}/png-image?channel={}&minIntensity={}&maxIntensity={}'.format(
+    #         self.baseURL, self.owner, self.project, self.stack, z,
+    #         render_obj.x_rng_unscaled[0], render_obj.y_rng_unscaled[0],
+    #         sum(map(abs, render_obj.x_rng_unscaled)),
+    #         sum(map(abs, render_obj.y_rng_unscaled)),
+    #         self.scale, self.channel, window[0], window[1])
 
-        print(render_url)
+    #     print(render_url)
 
-        r = requests.get(render_url, timeout=15)
-        test_img = Image.open(BytesIO(r.content))
-        test_data = np.asarray(test_img)[:, :, 0]
+    #     r = requests.get(render_url, timeout=15)
+    #     test_img = Image.open(BytesIO(r.content))
+    #     test_data = np.asarray(test_img)[:, :, 0]
 
-        # for comparison:
-        # test_img_fn = 'local_img_test_data\\render_img_test_scale_channel.png'
-        # test_img = Image.fromarray(test_data)
-        # test_img.save(test_img_fn)
+    #     # for comparison:
+    #     # test_img_fn = 'local_img_test_data\\render_img_test_scale_channel.png'
+    #     # test_img = Image.fromarray(test_data)
+    #     # test_img.save(test_img_fn)
 
-        # rend_img = Image.fromarray(data)
-        # rend_img.save(test_img_fn[0:-4] + '_rend_res.png')
+    #     # rend_img = Image.fromarray(data)
+    #     # rend_img.save(test_img_fn[0:-4] + '_rend_res.png')
 
-        assert data.shape == test_data.shape
-        assert np.sum(data) == np.sum(test_data)
-        assert np.array_equal(data, test_data)
+    #     assert data.shape == test_data.shape
+    #     assert np.sum(data) == np.sum(test_data)
+    #     assert np.array_equal(data, test_data)
 
     def test_get_render_scaled_img(self):
         self.scale = .25

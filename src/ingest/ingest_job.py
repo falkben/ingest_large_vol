@@ -113,7 +113,7 @@ class IngestJob:
         self.boss_config_file = args.get('boss_config_file')
 
         # Document the arguments passed
-        self.send_msg('{} Command parameters: {}'.format(
+        self.send_msg('{} Command parameters used: {}'.format(
             get_formatted_datetime(), args))
 
     def create_slack_session(self, slack_token_file):
