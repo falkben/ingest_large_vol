@@ -101,10 +101,12 @@ offset_extents = False
 # you can manually force offsets for a channel.
 # Useful when there are a handful of mult. channels, with different negative extents,
 # that you want to have in the same shared volume
+# note that if using render scale, this should be in the scaled coordinates
 forced_offsets = None
 # forced_offsets = [0, 0, 0]
 
 # only need to specify if forcing a particular coordinate frame extent
+# note that if using render scale, this should be in the scaled coordinates
 coord_frame_x_extent = None
 coord_frame_y_extent = None
 coord_frame_z_extent = None

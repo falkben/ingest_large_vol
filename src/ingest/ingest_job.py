@@ -295,7 +295,7 @@ class IngestJob:
 
     def load_render_slice(self, z_slice):
         self.send_msg('Getting slice {} from render. Time: {}'.format(
-            z_slice, time.asctime(time.localtime(time.time()))))
+            z_slice, time.asctime()))
         try:
             return self.render_obj.get_render_img(z_slice, window=self.render_window)
         except Exception as err:
@@ -362,7 +362,7 @@ class IngestJob:
         if z_index >= self.z_range[1]:
             raise IndexError("Z-index out of range")
 
-        matches = re.findall('<(p:\d+)?>', base_fname)
+        matches = re.findall(r'<(p:\d+)?>', base_fname)
         for m in matches:
             if m:
                 # There is zero padding

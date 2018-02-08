@@ -161,7 +161,7 @@ class TestIngestJob:
         self.args.datatype = 'uint32'
 
         with pytest.raises(ValueError):
-            ingest_job = IngestJob(self.args)
+            IngestJob(self.args)
 
     def test_create_s3_IngestJob(self):
         pass
