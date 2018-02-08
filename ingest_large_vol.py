@@ -211,6 +211,12 @@ def per_channel_ingest(args, channel):
                                 x_rng[0] + ingest_job.x_extent[0]:x_rng[1] + ingest_job.x_extent[0]]
                 data = np.asarray(data, order='C')
 
+                if np.sum(data) == 0:
+                    ingest_job.send_msg('{} Block empty for Collection: {}, Experiment: {}, Channel: {} x/y/z: {}/{}/{}, skipping'.format(
+                        get_formatted_datetime(),
+                        ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name, x_rng, y_rng, z_rng))
+                    continue
+
                 # POST each block to the BOSS
                 post_cutout(boss_res_params, ingest_job, x_rng, y_rng, z_rng, data,
                             attempts=3)
