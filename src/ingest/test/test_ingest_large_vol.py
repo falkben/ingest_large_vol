@@ -152,7 +152,7 @@ class TestIngestLargeVol:
 
         ingest_job = IngestJob(self.args)
 
-        gen_images(ingest_job,  intensity_range=30)
+        gen_images(ingest_job, intensity_range=30)
 
         channel = self.args.channel
         result = per_channel_ingest(self.args, channel)
@@ -221,7 +221,7 @@ class TestIngestLargeVol:
         ingest_job = IngestJob(self.args)
         os.remove(ingest_job.get_log_fname())
 
-    def test_per_channel_ingest_neg_xextent_no_offset(self):
+    def test_per_channel_ingest_neg_x_extent_no_offset(self):
         self.args.experiment = 'test_neg_extent_no_offset'
         self.args.channel = 'def_files'
         self.args.x_extent = [-1000, 0]
@@ -240,7 +240,7 @@ class TestIngestLargeVol:
         with pytest.raises(ValueError):
             self.ingest_test_per_channel(self.args, channels)
 
-    def test_per_channel_ingest_neg_x_exent_offset(self):
+    def test_per_channel_ingest_neg_x_extent_offset(self):
         now = datetime.now()
 
         self.args.experiment = 'test_neg_offset_' + \
@@ -275,7 +275,7 @@ class TestIngestLargeVol:
         if len(channels) > 0:
             boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
 
-    def test_per_channel_ingest_neg_z_exent_offset(self):
+    def test_per_channel_ingest_neg_z_extent_offset(self):
         now = datetime.now()
 
         self.args.experiment = 'test_neg_offset_' + \
@@ -334,6 +334,32 @@ class TestIngestLargeVol:
         result = per_channel_ingest(self.args, channel)
         assert result == 0
 
+        boss_res_params = BossResParams(IngestJob(self.args), get_only=True)
+        boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
+        boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
+
+    def test_ingest_render_stack_uint16(self):
+        now = datetime.now()
+
+        self.args.datasource = 'render'
+        self.args.experiment = 'test_render_' + now.strftime("%Y%m%d-%H%M%S")
+        self.args.channel = 'image_test_' + now.strftime("%Y%m%d-%H%M%S")
+        self.args.datatype = 'uint16'
+        self.args.render_owner = '6_ribbon_experiments'
+        self.args.render_project = 'M321160_Ai139_smallvol'
+        self.args.render_stack = 'Median_1_Gephyrin'
+        self.args.render_baseURL = 'https://render-dev-eric.neurodata.io/render-ws/v1/'
+
+        self.args.create_resources = True
+        channel = self.args.channel
+        result = per_channel_ingest(self.args, channel)
+        assert result == 0
+
+        self.args.create_resources = False
+        result = per_channel_ingest(self.args, channel)
+        assert result == 0
+
+        # cleanup
         boss_res_params = BossResParams(IngestJob(self.args), get_only=True)
         boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
         boss_res_params.rmt.delete_project(boss_res_params.exp_resource)

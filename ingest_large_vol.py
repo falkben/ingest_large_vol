@@ -63,6 +63,7 @@ def post_cutout(boss_res_params, ingest_job, x_rng, y_rng, z_rng, data, attempts
         msg = '{} Error: data upload failed after multiple attempts, skipping. {}'.format(
             get_formatted_datetime(), cutout_msg)
         ingest_job.send_msg(msg, send_slack=True)
+        ingest_job.num_POST_failures += 1
         return 1
     return 0
 
@@ -134,11 +135,11 @@ def assert_equal(boss_res_params, ingest_job, z_rng):
             rand_slice, ingest_job.get_img_fname(rand_slice)), send_slack=True)
 
 
-def get_supercube_lims(z_rng, stride=16):
+def get_supercube_lims(rng, stride=16):
     # stride = height of super cuboid
 
-    first = z_rng[0]    # inclusive
-    last = z_rng[1]     # exclusive
+    first = rng[0]    # inclusive
+    last = rng[1]     # exclusive
 
     buckets = defaultdict(list)
     for z in range(first, last):
@@ -193,8 +194,6 @@ def per_channel_ingest(args, channel):
     y_buckets = get_supercube_lims(ingest_job.y_extent, stride_y)
     z_buckets = get_supercube_lims(ingest_job.z_range, stride_z)
 
-    num_POST_failures = 0
-
     # load images files in stacks of 16 at a time into numpy array
     for _, z_slices in z_buckets.items():
         # read images into numpy array
@@ -213,8 +212,8 @@ def per_channel_ingest(args, channel):
                 data = np.asarray(data, order='C')
 
                 # POST each block to the BOSS
-                num_POST_failures += post_cutout(boss_res_params, ingest_job, x_rng, y_rng, z_rng, data,
-                                                 attempts=3)
+                post_cutout(boss_res_params, ingest_job, x_rng, y_rng, z_rng, data,
+                            attempts=3)
 
     # checking data posted correctly for an entire z slice
     assert_equal(boss_res_params, ingest_job, ingest_job.z_range)
@@ -222,10 +221,12 @@ def per_channel_ingest(args, channel):
     ch_link = (
         'http://ndwt.neurodata.io/channel_detail/{}/{}/{}/').format(ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name)
 
-    ingest_job.send_msg('{} Finished z slices {} for Collection: {}, Experiment: {}, Channel: {}\nThere were {} POST failures.\nView properties of channel and start downsample job on ndwebtools: {}'.format(
-        get_formatted_datetime(), ingest_job.z_range, ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name, num_POST_failures, ch_link), send_slack=True)
+    ingest_job.send_msg('{} Finished z slices {} for Collection: {}, Experiment: {}, Channel: {}\nThere were {} read failures and {} POST failures.\nView properties of channel and start downsample job on ndwebtools: {}'.format(
+        get_formatted_datetime(),
+        ingest_job.z_range, ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name,
+        ingest_job.num_READ_failures, ingest_job.num_POST_failures, ch_link), send_slack=True)
 
-    return num_POST_failures
+    return 0
 
 
 def main():
@@ -269,6 +270,14 @@ def main():
                         help='Volume extent in z (slices/images)')
     parser.add_argument('--offset_extents', action='store_true',
                         help='Offset any negative extents to start at zero and store the original values as BOSS metadata')
+    parser.add_argument('--forced_offsets', type=int, nargs=3,
+                        help='Offset negative extents by a certain value in x/y/z')
+    parser.add_argument('--coord_frame_x_extent', type=int, nargs=2,
+                        help='Force coordinate frame to be of a partical x extent (must contain data after any offsets)')
+    parser.add_argument('--coord_frame_y_extent', type=int, nargs=2,
+                        help='Force coordinate frame to be of a partical y extent (must contain data after any offsets)')
+    parser.add_argument('--coord_frame_z_extent', type=int, nargs=2,
+                        help='Force coordinate frame to be of a partical z extent (must contain data after any offsets)')
 
     parser.add_argument('--z_range', type=int, nargs=2,
                         help='Z slices to ingest: start (inclusive) end (exclusive)')

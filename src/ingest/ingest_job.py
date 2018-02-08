@@ -101,10 +101,22 @@ class IngestJob:
 
         # initialize offset to zero (x,y,z)
         self.offsets = [0, 0, 0]
-        if args.get('offset_extents'):  # if user specified, we calculate the offset
-            self.offset_neg_extents()
+        self.forced_offsets = args.get('forced_offsets')
+        # if user specified, we calculate the offset
+        if args.get('offset_extents') or self.forced_offsets is not None:
+            # calculate and store offsets
+            self.offsets = self.calc_offsets()
+
+            # create new extents
+            self.offset_extents()
 
         self.set_img_size()
+
+        self.coord_frame_x_extent = args.get('coord_frame_x_extent')
+        self.coord_frame_y_extent = args.get('coord_frame_y_extent')
+        self.coord_frame_z_extent = args.get('coord_frame_z_extent')
+        self.set_coord_frame_extents()
+        self.validate_coord_frames()
 
         # creating the slack session
         self.slack_obj = self.create_slack_session(
@@ -117,6 +129,9 @@ class IngestJob:
             self.s3_res = None
 
         self.boss_config_file = args.get('boss_config_file')
+
+        self.num_READ_failures = 0
+        self.num_POST_failures = 0
 
         # Document the arguments passed
         self.send_msg('{} Command parameters used: {}'.format(
@@ -137,6 +152,15 @@ class IngestJob:
 
         # z range is a limit itself - we check we aren't going over our limit with z_range
         validate_limit(self.limit_z, self.z_range)
+
+    def validate_coord_frames(self):
+        coord_extents = [self.coord_frame_x_extent,
+                         self.coord_frame_y_extent, self.coord_frame_z_extent]
+        extents = [self.x_extent, self.y_extent, self.z_extent]
+
+        for coord, ext in zip(coord_extents, extents):
+            if coord[0] > ext[0] or coord[1] < ext[1]:
+                raise ValueError
 
     def create_slack_session(self, slack_token_file):
         if slack_token_file is None:
@@ -190,17 +214,29 @@ class IngestJob:
             self.slack_obj.files.upload(content='\n'.join(
                 content), channels='@' + self.slack_usr, title=get_formatted_datetime() + '_tail_of_log')
 
+    def calc_offsets(self):
+        if self.forced_offsets is not None:
+            return self.forced_offsets
+
+        offsets = []
+        for extent in [self.x_extent, self.y_extent, self.z_extent]:
+            offset = 0
+            if extent[0] < 0:
+                offset = abs(extent[0])
+            offsets.append(offset)
+        return offsets
+
     def offset_extents(self):
         self.x_extent, self.y_extent, self.z_extent = [
             [ext[0] + off, ext[1] + off] for ext, off in zip([self.x_extent, self.y_extent, self.z_extent], self.offsets)]
 
-    def offset_neg_extents(self):
-        # calculate and store offsets
-        self.offsets = calc_offsets(
-            [self.x_extent, self.y_extent, self.z_extent])
-
-        # create new extents
-        self.offset_extents()
+    def set_coord_frame_extents(self):
+        if self.coord_frame_x_extent is None:
+            self.coord_frame_x_extent = self.x_extent
+        if self.coord_frame_y_extent is None:
+            self.coord_frame_y_extent = self.y_extent
+        if self.coord_frame_z_extent is None:
+            self.coord_frame_z_extent = self.z_extent
 
     def set_img_size(self):
         # validation that xyz extents are not negative
@@ -232,6 +268,7 @@ class IngestJob:
             msg = 'File not found: {}'.format(img_fname)
 
             self.send_msg(msg, send_slack=True)
+            self.num_READ_failures += 1
             if self.warn_missing_files:
                 return None
             else:
@@ -250,6 +287,7 @@ class IngestJob:
                     time.sleep(2**(attempt + 1))
 
         self.send_msg(msg, send_slack=True)
+        self.num_READ_failures += 1
         if self.warn_missing_files:
             return None
         else:
@@ -263,6 +301,7 @@ class IngestJob:
         except Exception as err:
             msg = 'Exception {} occurred when getting image {} from render with error message {}'.format(
                 err, z_slice, str(err))
+            self.num_READ_failures += 1
             if self.warn_missing_files:
                 return None
             else:
@@ -373,16 +412,6 @@ class IngestJob:
 
 def get_formatted_datetime():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def calc_offsets(extents):
-    offsets = []
-    for extent in extents:
-        offset = 0
-        if extent[0] < 0:
-            offset = abs(extent[0])
-        offsets.append(offset)
-    return offsets
 
 
 def validate_limit(data_rng, limit):

@@ -103,6 +103,36 @@ class TestIngestJob:
 
         os.remove(ingest_job.get_log_fname())
 
+    def test_create_local_IngestJob_neg_extents_forced_offsets(self):
+        self.args.x_extent = [-1000, -100]
+        self.args.forced_offsets = [1100, 100, 200]
+
+        ingest_job = IngestJob(self.args)
+
+        assert ingest_job.offsets == [1100, 100, 200]
+        assert ingest_job.x_extent == [100, 1000]
+        assert ingest_job.y_extent == [100, 1124]
+        assert ingest_job.z_extent == [200, 300]
+
+        os.remove(ingest_job.get_log_fname())
+
+    def test_create_local_IngestJob_specific_coord_frame(self):
+        self.args.coord_frame_x_extent = [0, 2000]
+
+        ingest_job = IngestJob(self.args)
+
+        assert ingest_job.coord_frame_x_extent == [0, 2000]
+        assert ingest_job.coord_frame_y_extent == [0, 1024]
+
+        os.remove(ingest_job.get_log_fname())
+
+    def test_create_local_IngestJob_out_of_bounds_coord_frame(self):
+        # smaller than the x_extent passed in
+        self.args.coord_frame_x_extent = [500, 800]
+
+        with pytest.raises(ValueError):
+            IngestJob(self.args)
+
     def test_create_local_IngestJob_annotation(self):
         self.args.source_channel = 'def_files'
         self.args.datatype = 'uint64'
@@ -295,6 +325,27 @@ class TestIngestJob:
         self.args.render_stack = 'Stitched_DAPI_1_Lowres_RoughAligned'
 
         ingest_job = IngestJob(self.args)
+
+        assert ingest_job.render_obj.x_rng_unscaled == [-3534, 12469]
+        assert ingest_job.render_obj.y_rng_unscaled == [-7196, 7734]
+
+        z_slice = ingest_job.z_range[0]
+        im_width, im_height, im_datatype = ingest_job.get_img_info(z_slice)
+
+        assert im_width == ingest_job.img_size[0]
+        assert im_height == ingest_job.img_size[1]
+        assert im_datatype == self.args.datatype
+        os.remove(ingest_job.get_log_fname())
+
+    def test_get_img_info_render_neg_extents_forced_offset(self):
+        self.set_render_args()
+        self.args.forced_offsets = [4000, 8000, 0]
+        self.args.render_stack = 'Stitched_DAPI_1_Lowres_RoughAligned'
+
+        ingest_job = IngestJob(self.args)
+
+        assert ingest_job.x_extent == [-3534+4000, 12469+4000]
+        assert ingest_job.y_extent == [-7196+8000, 7734+8000]
 
         assert ingest_job.render_obj.x_rng_unscaled == [-3534, 12469]
         assert ingest_job.render_obj.y_rng_unscaled == [-7196, 7734]
