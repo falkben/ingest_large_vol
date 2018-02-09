@@ -2,12 +2,14 @@ import os
 import time
 from argparse import Namespace
 from datetime import datetime
+from multiprocessing.dummy import Pool as ThreadPool
+from functools import partial
 
 import numpy as np
 import pytest
 
-from ....ingest_large_vol import (per_channel_ingest, post_cutout,
-                                  read_channel_names, assert_equal)
+from ....ingest_large_vol import (per_channel_ingest, post_cutout, read_channel_names,
+                                  assert_equal, ingest_block, get_supercube_lims, download_boss_slice)
 from ..boss_resources import BossResParams
 from ..ingest_job import IngestJob
 from .create_images import del_test_images, gen_images
@@ -100,6 +102,62 @@ class TestIngestLargeVol:
         # assert they are the same
         assert np.array_equal(data_boss, data)
 
+        os.remove(ingest_job.get_log_fname())
+
+    def test_ingest_blocks_uint16_8_threads(self):
+        now = (datetime.now()).strftime("%Y%m%d-%H%M%S")
+
+        self.args.experiment = 'dev_ingest_larger' + now
+        self.args.channel = 'def_files' + now
+        self.args.x_extent = [0, 8*1024]
+        self.args.z_range = [0, 16]
+        self.args.datatype = 'uint16'
+        self.args.extension = 'tif'
+
+        x_size = 8*1024
+        y_size = 1024
+
+        stride_x = 1024
+        x_buckets = get_supercube_lims(self.args.x_extent, stride_x)
+
+        ingest_job = IngestJob(self.args)
+        gen_images(ingest_job)
+
+        self.args.create_resources = True
+        result = per_channel_ingest(self.args, self.args.channel)
+        assert result == 0
+
+        boss_res_params = BossResParams(ingest_job, get_only=True)
+
+        z_slices = list(range(self.args.z_range[0], self.args.z_range[-1]))
+        y_rng = self.args.y_extent
+
+        im_array = ingest_job.read_img_stack(z_slices)
+
+        threads = 8
+        pool = ThreadPool(threads)
+
+        ingest_block_partial = partial(
+            ingest_block, x_buckets=x_buckets, boss_res_params=boss_res_params, ingest_job=ingest_job,
+            y_rng=y_rng, z_rng=self.args.z_range, im_array=im_array)
+
+        start_time = time.time()
+        pool.map(ingest_block_partial, x_buckets.keys())
+        time_taken = time.time() - start_time
+        print('{} secs taken with {} threads'.format(time_taken, threads))
+
+        data_boss = download_boss_slice(
+            boss_res_params, ingest_job, 0)[0, :, :]
+
+        data_local = im_array[0, :, :]
+
+        assert np.array_equal(data_boss, data_local)
+
+        # cleanup
+        ingest_job = IngestJob(self.args)
+        boss_res_params = BossResParams(ingest_job, get_only=True)
+        boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
+        boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
         os.remove(ingest_job.get_log_fname())
 
     def test_post_uint16_cutout_offset_pixels(self):
@@ -334,6 +392,7 @@ class TestIngestLargeVol:
         result = per_channel_ingest(self.args, channel)
         assert result == 0
 
+        # cleanup
         ingest_job = IngestJob(self.args)
         boss_res_params = BossResParams(ingest_job, get_only=True)
         boss_res_params.rmt.delete_project(boss_res_params.ch_resource)

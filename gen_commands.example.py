@@ -136,7 +136,7 @@ limit_z = None
 # Number of workers to use
 # each worker loads additional 16 image files so watch out for out of memory errors
 # ignored if zrange is None
-workers = 4
+workers = 1
 
 
 """ Code to generate the commands """

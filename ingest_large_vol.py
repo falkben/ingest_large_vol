@@ -9,6 +9,8 @@ import sys
 import time
 from collections import defaultdict
 from datetime import datetime
+from functools import partial
+from multiprocessing.dummy import Pool as ThreadPool
 
 import numpy as np
 from PIL import Image
@@ -77,13 +79,12 @@ def download_boss_slice(boss_res_params, ingest_job, z_slice, attempts=3):
 
     x_buckets = get_supercube_lims(ingest_job.x_extent, stride=stride)
     y_buckets = get_supercube_lims(ingest_job.y_extent, stride=stride)
-
-    for _, x_slices in x_buckets.items():
-        x_rng = [x_slices[0],
-                 x_slices[-1]+1]
-        for _, y_slices in y_buckets.items():
-            y_rng = [y_slices[0],
-                     y_slices[-1]+1]
+    for _, y_slices in y_buckets.items():
+        y_rng = [y_slices[0],
+                 y_slices[-1]+1]
+        for _, x_slices in x_buckets.items():
+            x_rng = [x_slices[0],
+                     x_slices[-1]+1]
             for attempt in range(attempts):
                 try:
                     im_array_boss[0, y_rng[0]-ingest_job.y_extent[0]:y_rng[1]-ingest_job.y_extent[0],
@@ -156,7 +157,28 @@ def get_formatted_datetime():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def per_channel_ingest(args, channel):
+def ingest_block(x_slice_key, x_buckets, boss_res_params, ingest_job, y_rng, z_rng, im_array):
+    # created for multithreading
+    x_slices = x_buckets[x_slice_key]
+
+    x_rng = [x_slices[0], x_slices[-1] + 1]
+
+    data = im_array[:, y_rng[0]-ingest_job.y_extent[0]:y_rng[1]-ingest_job.y_extent[0],
+                    x_rng[0]-ingest_job.x_extent[0]:x_rng[1]-ingest_job.x_extent[0]]
+    data = np.asarray(data, order='C')
+
+    if np.sum(data) == 0:
+        ingest_job.send_msg('{} Block empty for Collection: {}, Experiment: {}, Channel: {} x/y/z: {}/{}/{}, skipping'.format(
+            get_formatted_datetime(),
+            ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name, x_rng, y_rng, z_rng))
+        return
+
+    # POST each block to the BOSS
+    post_cutout(boss_res_params, ingest_job,
+                x_rng, y_rng, z_rng, data, attempts=3)
+
+
+def per_channel_ingest(args, channel, threads=8):
     args.channel = channel
     ingest_job = IngestJob(args)
 
@@ -198,32 +220,23 @@ def per_channel_ingest(args, channel):
     y_buckets = get_supercube_lims(ingest_job.y_extent, stride_y)
     z_buckets = get_supercube_lims(ingest_job.z_range, stride_z)
 
+    pool = ThreadPool(threads)
+
     # load images files in stacks of 16 at a time into numpy array
     for _, z_slices in z_buckets.items():
         # read images into numpy array
         im_array = ingest_job.read_img_stack(z_slices)
-        z_rng = [z - ingest_job.offsets[2]
-                 for z in [z_slices[0], z_slices[-1] + 1]]
+        z_rng = [z_slices[0] - ingest_job.offsets[2],
+                 z_slices[-1] + 1 - ingest_job.offsets[2]]
 
         # slice into np array blocks
         for _, y_slices in y_buckets.items():
             y_rng = [y_slices[0], y_slices[-1] + 1]
-            for _, x_slices in x_buckets.items():
-                x_rng = [x_slices[0], x_slices[-1] + 1]
 
-                data = im_array[:, y_rng[0]-ingest_job.y_extent[0]:y_rng[1]-ingest_job.y_extent[0],
-                                x_rng[0]-ingest_job.x_extent[0]:x_rng[1]-ingest_job.x_extent[0]]
-                data = np.asarray(data, order='C')
-
-                if np.sum(data) == 0:
-                    ingest_job.send_msg('{} Block empty for Collection: {}, Experiment: {}, Channel: {} x/y/z: {}/{}/{}, skipping'.format(
-                        get_formatted_datetime(),
-                        ingest_job.coll_name, ingest_job.exp_name, ingest_job.ch_name, x_rng, y_rng, z_rng))
-                    continue
-
-                # POST each block to the BOSS
-                post_cutout(boss_res_params, ingest_job, x_rng, y_rng, z_rng, data,
-                            attempts=3)
+            ingest_block_partial = partial(
+                ingest_block, x_buckets=x_buckets, boss_res_params=boss_res_params, ingest_job=ingest_job,
+                y_rng=y_rng, z_rng=z_rng, im_array=im_array)
+            pool.map(ingest_block_partial, x_buckets.keys())
 
     # checking data posted correctly for an entire z slice
     assert_equal(boss_res_params, ingest_job, ingest_job.z_range)
