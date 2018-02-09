@@ -46,12 +46,20 @@ class TestIngestJob:
         self.args.y_extent = None
         self.args.z_extent = None
 
+        with pytest.raises(ValueError):
+            IngestJob(self.args)
+
+    def test_create_local_IngestJob_only_coord_extents(self):
+        self.args.coord_frame_x_extent = [0, 1000]
+        self.args.coord_frame_y_extent = [0, 1024]
+        self.args.coord_frame_z_extent = [0, 100]
+
         ingest_job = IngestJob(self.args)
 
-        assert ingest_job.x_extent is None
-        assert ingest_job.y_extent is None
-        assert ingest_job.z_extent is None
-        assert ingest_job.img_size is None
+        assert ingest_job.x_extent == [0, 1000]
+        assert ingest_job.coord_frame_x_extent == [0, 1000]
+        assert ingest_job.y_extent == [0, 1024]
+        assert ingest_job.coord_frame_y_extent == [0, 1024]
 
         os.remove(ingest_job.get_log_fname())
 
@@ -285,6 +293,35 @@ class TestIngestJob:
         img_fname = ingest_job.get_img_fname(0)
 
         assert img_fname is None
+        os.remove(ingest_job.get_log_fname())
+
+    # was mostly for debugging, takes ~30 seconds at 1/32
+    def test_get_AT_img_render_16bit(self):
+        self.args.datasource = 'render'
+        self.args.collection = 'collman'
+        self.args.experiment = 'M247514_Rorb_1_light'
+        self.args.channel = 'synapsin'
+        self.args.datatype = 'uint16'
+
+        self.args.forced_offsets = [2041, 6259, 0]
+        self.args.coord_frame_x_extent = [0, 14215]
+        self.args.coord_frame_y_extent = [0, 11123]
+        self.args.coord_frame_z_extent = [0, 101]
+        self.args.render_scale = 1/2**8
+
+        self.args.voxel_size = [96, 96, 50]
+        self.args.voxel_unit = 'nanometers'
+
+        self.args.render_owner = 'Forrest'
+        self.args.render_project = 'M247514_Rorb_1'
+        self.args.render_stack = 'BIGALIGN_LENS_synapsin_deconvnew'
+        self.args.render_baseURL = 'https://render-dev-eric.neurodata.io/render-ws/v1/'
+
+        ingest_job = IngestJob(self.args)
+
+        img_array = ingest_job.load_img(2)
+        assert np.absolute(img_array).sum() > 0
+
         os.remove(ingest_job.get_log_fname())
 
     def test_load_img_local(self):

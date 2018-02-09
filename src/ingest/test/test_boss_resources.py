@@ -23,11 +23,15 @@ class TestBossResources:
             collection='ben_dev',
             experiment='dev_ingest_4',
             channel='def_files',
-            boss_config_file='neurodata.cfg')
+            boss_config_file='neurodata.cfg',
+            x_extent=[0, 1000],
+            y_extent=[0, 1024],
+            z_extent=[0, 100])
 
         ingest_job = IngestJob(args)
 
         boss_res_params = BossResParams(ingest_job, get_only=True)
+
         assert boss_res_params.coll_resource.name == args.collection
         assert boss_res_params.exp_resource.name == args.experiment
         assert boss_res_params.ch_resource.name == args.channel
@@ -230,7 +234,10 @@ class TestBossResources:
             experiment='dev_ingest_4',
             channel='def_files_annot',
             boss_config_file='neurodata.cfg',
-            source_channel='def_files'
+            source_channel='def_files',
+            x_extent=[0, 1000],
+            y_extent=[0, 1024],
+            z_extent=[0, 100]
         )
 
         ingest_job = IngestJob(args)

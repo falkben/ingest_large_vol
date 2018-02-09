@@ -155,8 +155,12 @@ class IngestJob:
 
     def validate_coord_frames(self):
         coord_extents = [self.coord_frame_x_extent,
-                         self.coord_frame_y_extent, self.coord_frame_z_extent]
+                         self.coord_frame_y_extent,
+                         self.coord_frame_z_extent]
         extents = [self.x_extent, self.y_extent, self.z_extent]
+
+        if None in extents or None in coord_extents:
+            raise ValueError
 
         for coord, ext in zip(coord_extents, extents):
             if coord[0] > ext[0] or coord[1] < ext[1]:
@@ -265,7 +269,8 @@ class IngestJob:
 
     def validate_local_img(self, img_fname):
         if not os.path.isfile(img_fname):
-            msg = 'File not found: {}'.format(img_fname)
+            msg = '{} File not found: {}'.format(
+                get_formatted_datetime(), img_fname)
 
             self.send_msg(msg, send_slack=True)
             self.num_READ_failures += 1
@@ -281,8 +286,8 @@ class IngestJob:
                 obj = self.s3_res.Object(self.s3_bucket_name, img_fname)
                 return io.BytesIO(obj.get()['Body'].read())
             except Exception as err:
-                msg = 'Exception {} occurred when getting image {} from s3'.format(
-                    err, img_fname)
+                msg = '{} Exception {} occurred when getting image {} from s3'.format(
+                    get_formatted_datetime(), err, img_fname)
                 if attempt != attempts - 1:
                     time.sleep(2**(attempt + 1))
 
@@ -294,13 +299,13 @@ class IngestJob:
             raise IOError(msg)
 
     def load_render_slice(self, z_slice):
-        self.send_msg('Getting slice {} from render. Time: {}'.format(
-            z_slice, time.asctime()))
+        self.send_msg('{} Getting slice {} from render.'.format(
+            get_formatted_datetime(), z_slice))
         try:
             return self.render_obj.get_render_img(z_slice, window=self.render_window)
         except Exception as err:
-            msg = 'Exception {} occurred when getting image {} from render with error message {}'.format(
-                err, z_slice, str(err))
+            msg = '{} Exception {} occurred when getting image {} from render with error message {}'.format(
+                get_formatted_datetime(), err, z_slice, str(err))
             self.num_READ_failures += 1
             if self.warn_missing_files:
                 return None
@@ -339,14 +344,16 @@ class IngestJob:
             return im
 
         except OSError:
-            msg = 'Problem opening file: {}'.format(img_fname)
+            msg = '{} Problem opening file: {}'.format(
+                get_formatted_datetime(), img_fname)
             self.send_msg(msg, send_slack=True)
             if self.warn_missing_files:
                 return None
             raise OSError(msg)
 
         except Exception as err:
-            msg = 'Unknown error {}: {}'.format(err, img_fname)
+            msg = '{} Unknown error {}: {}'.format(
+                get_formatted_datetime(), err, img_fname)
             self.send_msg(msg, send_slack=True)
             if self.warn_missing_files:
                 return None

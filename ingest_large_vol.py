@@ -79,15 +79,18 @@ def download_boss_slice(boss_res_params, ingest_job, z_slice, attempts=3):
     y_buckets = get_supercube_lims(ingest_job.y_extent, stride=stride)
 
     for _, x_slices in x_buckets.items():
+        x_rng = [x_slices[0],
+                 x_slices[-1]+1]
         for _, y_slices in y_buckets.items():
+            y_rng = [y_slices[0],
+                     y_slices[-1]+1]
             for attempt in range(attempts):
                 try:
-                    im_array_boss[0, y_slices[0]-ingest_job.y_extent[0]:y_slices[-1]-ingest_job.y_extent[0], x_slices[0]-ingest_job.x_extent[0]:x_slices[-1]-ingest_job.x_extent[0]] = rmt.get_cutout(
+                    im_array_boss[0, y_rng[0]-ingest_job.y_extent[0]:y_rng[1]-ingest_job.y_extent[0],
+                                  x_rng[0]-ingest_job.x_extent[0]:x_rng[-1]-ingest_job.x_extent[0]] = rmt.get_cutout(
                         boss_res_params.ch_resource,
                         ingest_job.res,
-                        [x_slices[0], x_slices[-1]],
-                        [y_slices[0], y_slices[-1]],
-                        [z_slice, z_slice + 1]
+                        x_rng, y_rng, [z_slice, z_slice + 1]
                     )
                 except Exception as e:
                     # attempt failed
@@ -199,7 +202,7 @@ def per_channel_ingest(args, channel):
     for _, z_slices in z_buckets.items():
         # read images into numpy array
         im_array = ingest_job.read_img_stack(z_slices)
-        z_rng = [z + ingest_job.offsets[2]
+        z_rng = [z - ingest_job.offsets[2]
                  for z in [z_slices[0], z_slices[-1] + 1]]
 
         # slice into np array blocks
@@ -208,8 +211,8 @@ def per_channel_ingest(args, channel):
             for _, x_slices in x_buckets.items():
                 x_rng = [x_slices[0], x_slices[-1] + 1]
 
-                data = im_array[:, y_rng[0] + ingest_job.y_extent[0]:y_rng[1] + ingest_job.y_extent[0],
-                                x_rng[0] + ingest_job.x_extent[0]:x_rng[1] + ingest_job.x_extent[0]]
+                data = im_array[:, y_rng[0]-ingest_job.y_extent[0]:y_rng[1]-ingest_job.y_extent[0],
+                                x_rng[0]-ingest_job.x_extent[0]:x_rng[1]-ingest_job.x_extent[0]]
                 data = np.asarray(data, order='C')
 
                 if np.sum(data) == 0:
