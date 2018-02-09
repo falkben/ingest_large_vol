@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from ....ingest_large_vol import (per_channel_ingest, post_cutout,
-                                  read_channel_names)
+                                  read_channel_names, assert_equal)
 from ..boss_resources import BossResParams
 from ..ingest_job import IngestJob
 from .create_images import del_test_images, gen_images
@@ -363,3 +363,32 @@ class TestIngestLargeVol:
         boss_res_params = BossResParams(IngestJob(self.args), get_only=True)
         boss_res_params.rmt.delete_project(boss_res_params.ch_resource)
         boss_res_params.rmt.delete_project(boss_res_params.exp_resource)
+
+    def test_assert_slices_equal(self):
+        # using a pre-existing data source
+
+        self.args.datasource = 'render'
+        self.args.collection = 'collman'
+        self.args.experiment = 'M247514_Rorb_1_light'
+        self.args.channel = 'synapsin'
+        self.args.datatype = 'uint16'
+
+        self.args.forced_offsets = [2041, 6259, 0]
+        self.args.coord_frame_x_extent = [0, 14215]
+        self.args.coord_frame_y_extent = [0, 11123]
+        self.args.coord_frame_z_extent = [0, 101]
+        self.args.render_scale = 0.03125
+
+        self.args.voxel_size = [96, 96, 50]
+        self.args.voxel_unit = 'nanometers'
+
+        self.args.render_owner = 'Forrest'
+        self.args.render_project = 'M247514_Rorb_1'
+        self.args.render_stack = 'BIGALIGN_LENS_synapsin_deconvnew'
+        self.args.render_baseURL = 'https://render-dev-eric.neurodata.io/render-ws/v1/'
+
+        ingest_job = IngestJob(self.args)
+        boss_res_params = BossResParams(ingest_job, get_only=True)
+        z_rng = self.args.z_range
+
+        assert assert_equal(boss_res_params, ingest_job, z_rng)

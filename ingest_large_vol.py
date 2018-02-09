@@ -68,27 +68,26 @@ def post_cutout(boss_res_params, ingest_job, x_rng, y_rng, z_rng, data, attempts
     return 0
 
 
-def download_rand_slice(boss_res_params, ingest_job, im_array_local, rand_slice):
-    im_array_boss = np.zeros(np.shape(im_array_local),
-                             dtype=type(im_array_local[0, 0]))
+def download_boss_slice(boss_res_params, ingest_job, z_slice, attempts=3):
+    im_array_boss = np.zeros([1, ingest_job.img_size[1], ingest_job.img_size[0]],
+                             dtype=ingest_job.datatype)
 
-    xM = np.shape(im_array_local)[1]
-    yM = np.shape(im_array_local)[2]
+    rmt = boss_res_params.rmt
     stride = 2048
-    attempts = 3
-    for xi in range(0, xM, stride):
-        xi_stop = xi + stride
-        if xi_stop > xM:
-            xi_stop = xM
-        for yi in range(0, yM, stride):
-            yi_stop = yi + stride
-            if yi_stop > yM:
-                yi_stop = yM
+
+    x_buckets = get_supercube_lims(ingest_job.x_extent, stride=stride)
+    y_buckets = get_supercube_lims(ingest_job.y_extent, stride=stride)
+
+    for _, x_slices in x_buckets.items():
+        for _, y_slices in y_buckets.items():
             for attempt in range(attempts):
                 try:
-                    im_array_boss[0, xi:xi_stop, yi:yi_stop] = boss_res_params.rmt.get_cutout(
-                        boss_res_params.ch_resource, ingest_job.res, [yi, yi_stop], [
-                            xi, xi_stop], [rand_slice, rand_slice + 1]
+                    im_array_boss[0, y_slices[0]-ingest_job.y_extent[0]:y_slices[-1]-ingest_job.y_extent[0], x_slices[0]-ingest_job.x_extent[0]:x_slices[-1]-ingest_job.x_extent[0]] = rmt.get_cutout(
+                        boss_res_params.ch_resource,
+                        ingest_job.res,
+                        [x_slices[0], x_slices[-1]],
+                        [y_slices[0], y_slices[-1]],
+                        [z_slice, z_slice + 1]
                     )
                 except Exception as e:
                     # attempt failed
@@ -111,28 +110,30 @@ def assert_equal(boss_res_params, ingest_job, z_rng):
     # choose a rand slice:
     rand_slice = np.random.randint(z_rng[0], z_rng[1])
 
-    # load source data (one z slice)
-    im_array_local = ingest_job.read_img_stack([rand_slice])
-
     # load data from Boss
     msg = '{} Getting random z slice from BOSS for comparison'.format(
         get_formatted_datetime())
     ingest_job.send_msg(msg)
 
-    im_array_boss = download_rand_slice(
-        boss_res_params, ingest_job, im_array_local, rand_slice + ingest_job.offsets[2])
+    im_array_boss = download_boss_slice(
+        boss_res_params, ingest_job, rand_slice + ingest_job.offsets[2])
 
     msg = '{} Z slice from BOSS downloaded'.format(
         get_formatted_datetime())
     ingest_job.send_msg(msg)
 
+    # load source data (one z slice)
+    im_array_local = ingest_job.read_img_stack([rand_slice])
+
     # assert that cutout from the boss is the same as what was sent
     if np.array_equal(im_array_boss, im_array_local):
         ingest_job.send_msg('Test slice {} in Boss matches file {}'.format(
             rand_slice, ingest_job.get_img_fname(rand_slice)))
+        return True
     else:
         ingest_job.send_msg('Test slice {} in Boss does *NOT* match file {}'.format(
             rand_slice, ingest_job.get_img_fname(rand_slice)), send_slack=True)
+        return False
 
 
 def get_supercube_lims(rng, stride=16):
