@@ -17,10 +17,17 @@ def parse_args():
     parser.add_argument('--outpath', type=str,
                         help='Full path for output files')
     parser.add_argument('--datatype', type=str,
-                        help='cast images as a particular dtype (uint8/uint16/uint64)')
+                        help='Cast images as a particular dtype (uint8/uint16/uint64)')
     # parser.add_argument('--scale_to_datatype', action='store_true',
     #                     help='flag to scale the input datatype to the datatype specified')
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    # validate args
+    if args.tiffstack is None:
+        raise ValueError('No input file')
+
+    return args
 
 
 def expand_stack(args):
